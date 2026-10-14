@@ -125,3 +125,19 @@ model UserWord {
   @@index([userId])
   @@index([status])
 }
+
+// ─── VerificationCode (برای تأیید ایمیل و ریست رمز) ──
+// type: "email_verification" | "password_reset"
+model VerificationCode {
+  id        String   @id @default(uuid())
+  userId    String?
+  email     String
+  code      String
+  type      String   // "email_verification" | "password_reset"
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, type])
+  @@index([code, type])
+}

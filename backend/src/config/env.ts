@@ -3,7 +3,6 @@ import "dotenv/config";
 
 /**
  * اعتبارسنجی متغیرهای محیطی در زمان اجرا.
- * اگر متغیری نامعتبر باشد، سرور بالا نمی‌آید و خطای واضح می‌دهد.
  */
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -22,6 +21,10 @@ const envSchema = z.object({
   PASSWORD_MIN_LENGTH: z.coerce.number().int().positive().default(8),
   RATE_LIMIT_AUTH_PER_MINUTE: z.coerce.number().int().positive().default(5),
 
+  // Email (Resend) — optional in dev
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().default("LINGO <noreply@lingo.app>"),
+
   LOG_LEVEL: z
     .enum(["trace", "debug", "info", "warn", "error", "fatal"])
     .default("info"),
@@ -30,7 +33,7 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error("❌ Invalid environment variables:");
+  console.error("Invalid environment variables:");
   console.error(parsed.error.flatten().fieldErrors);
   process.exit(1);
 }
