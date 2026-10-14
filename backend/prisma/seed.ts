@@ -1,10 +1,9 @@
 /**
- * Seed script — برای پر کردن دیتابیس با چند لغت اولیه.
- * فقط برای development — در production اجرا نشود.
- *
- * اجرا: npx prisma db seed
+ * Seed script — پر کردن دیتابیس با داده‌ی اولیه.
+ * ۱۰ لغت آلمانی نمونه + ۱ کاربر ادمین پیش‌فرض.
  */
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -18,7 +17,7 @@ const words = [
   { german: "schön", persian: "زیبا", article: null, partOfSpeech: "Adjective", level: "A2", example: "Das Wetter ist schön.", exampleFa: "هوا زیباست." },
   { german: "Lehrer", persian: "معلم", article: "der", plural: "Lehrer", partOfSpeech: "Noun", level: "A2", example: "Der Lehrer ist nett.", exampleFa: "معلم مهربان است." },
   { german: "Wasser", persian: "آب", article: "das", partOfSpeech: "Noun", level: "A1", example: "Ich trinke Wasser.", exampleFa: "من آب می‌نوشم." },
-  { german: " essen", persian: "خوردن", article: null, partOfSpeech: "Verb", level: "A1", example: "Wir essen zusammen.", exampleFa: "ما با هم غذا می‌خوریم." },
+  { german: "essen", persian: "خوردن", article: null, partOfSpeech: "Verb", level: "A1", example: "Wir essen zusammen.", exampleFa: "ما با هم غذا می‌خوریم." },
 ];
 
 async function main() {
@@ -26,9 +25,61 @@ async function main() {
 
   // پاک‌سازی
   await prisma.userWord.deleteMany();
+  await prisma.refreshToken.deleteMany();
+  await prisma.session.deleteMany();
   await prisma.word.deleteMany();
+  await prisma.profile.deleteMany();
+  await prisma.user.deleteMany();
 
-  // ساخت لغات
+  // ─── ساخت ادمین پیش‌فرض ───────────────
+  const adminPassword = await bcrypt.hash("Lingo@Admin2026", 12);
+  const admin = await prisma.user.create({
+    data: {
+      email: "admin@lingo.app",
+      username: "admin",
+      passwordHash: adminPassword,
+      role: "admin",
+      status: "active",
+      isEmailVerified: true,
+      profile: {
+        create: {
+          firstName: "مدیر",
+          lastName: "سیستم",
+          level: "C2",
+        },
+      },
+    },
+  });
+  console.log(`✅ Admin user created: ${admin.email} (password: Lingo@Admin2026)`);
+
+  // ─── ساخت چند کاربر نمونه ─────────────
+  const sampleUsers = [
+    { email: "ahmad@example.com", username: "ahmad", firstName: "احمد", lastName: "حسینی", level: "A1" },
+    { email: "maryam@example.com", username: "maryam", firstName: "مریم", lastName: "محمدی", level: "A2" },
+    { email: "ali@example.com", username: "ali", firstName: "علی", lastName: "رضایی", level: "B1" },
+  ];
+  for (const su of sampleUsers) {
+    const pwd = await bcrypt.hash("User1234", 12);
+    await prisma.user.create({
+      data: {
+        email: su.email,
+        username: su.username,
+        passwordHash: pwd,
+        role: "user",
+        status: "active",
+        profile: {
+          create: {
+            firstName: su.firstName,
+            lastName: su.lastName,
+            level: su.level,
+          },
+        },
+      },
+    });
+  }
+  console.log(`✅ ${sampleUsers.length} sample users created.`);
+
+  // ─── ساخت لغات ───────────────────────
   for (const w of words) {
     await prisma.word.create({
       data: {
@@ -43,8 +94,11 @@ async function main() {
       },
     });
   }
+  console.log(`✅ ${words.length} words seeded.`);
 
-  console.log(`✅ Seeded ${words.length} words.`);
+  console.log("\n📋 Login credentials:");
+  console.log("   Admin:  admin@lingo.app / Lingo@Admin2026");
+  console.log("   User:   ahmad@example.com / User1234");
 }
 
 main()
