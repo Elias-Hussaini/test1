@@ -48,6 +48,27 @@ try {
     exit 1
 }
 
+# ─── بررسی اتصال به npm registry ─────────
+Write-Step "بررسی اتصال به npm registry"
+$env:NPM_CONFIG_REGISTRY = $null  # پاک‌سازی registry سفارشی اگه هست
+$npmPing = npm ping 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Warn "npm registry در دسترس نیست."
+    Write-Host ""
+    Write-Host "  اگه فیلترشکن داری، اول این رو بزن:" -ForegroundColor Yellow
+    Write-Host "    cd .." -ForegroundColor Cyan
+    Write-Host "    .\enable-proxy.ps1" -ForegroundColor Cyan
+    Write-Host "    cd backend" -ForegroundColor Cyan
+    Write-Host "    .\setup.ps1" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  اگه فیلترشکن نداری، این رو امتحان کن:" -ForegroundColor Yellow
+    Write-Host "    npm config set registry https://registry.npmmirror.com" -ForegroundColor Cyan
+    Write-Host "    (mirror چینی — معمولاً از ایران کار می‌کنه)" -ForegroundColor DarkGray
+    Write-Host ""
+    exit 1
+}
+Write-OK "npm registry در دسترسه."
+
 # ─── ۱. نصب پکیج‌ها ───────────────────────
 Write-Step "نصب پکیج‌ها (npm install)"
 if (Test-Path "node_modules") {
