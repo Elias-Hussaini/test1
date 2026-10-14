@@ -1,0 +1,127 @@
+// ═══════════════════════════════════════════
+// LINGO — Prisma Schema
+// ═══════════════════════════════════════════
+// برای development از SQLite استفاده می‌کنیم.
+// برای production کافی است provider را به postgresql تغییر دهید و
+// DATABASE_URL را تنظیم کنید. بقیه‌ی چیزها بدون تغییر کار می‌کنند.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums (به‌صورت String چون SQLite enum واقعی ندارد) ───
+// مقادیر مجاز در کامنت نوشته شده‌اند؛ در service layer با Zod اعتبارسنجی می‌شوند.
+
+// ─── User ──────────────────────────────────
+// role: "user" | "guest" | "premium" | "admin"
+// status: "active" | "blocked" | "suspended"
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  username      String   @unique
+  role          String   @default("user")
+  status        String   @default("active")
+  isEmailVerified Boolean @default(false)
+  avatarUrl     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile       Profile?
+  sessions      Session[]
+  userWords     UserWord[]
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@index([status])
+}
+
+// ─── Profile ──────────────────────────────
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName String?
+  lastName  String?
+  bio       String?
+  level     String   @default("A1") // A1 | A2 | B1 | B2
+  xp        Int      @default(0)
+  streak    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Session (مدیریت نشست‌های فعال) ────────
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent    String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@index([userId])
+}
+
+// ─── RefreshToken (برای revoke کردن توکن‌ها) ─
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+  @@index([token])
+}
+
+// ─── Word (لغات آلمانی) ───────────────────
+// article: "der" | "die" | "das" | null
+// partOfSpeech: "Noun" | "Verb" | "Adjective" | "Adverb" | "Preposition" | "Conjunction"
+// level: "A1" | "A2" | "B1" | "B2" | "C1" | "C2"
+model Word {
+  id           String   @id @default(uuid())
+  german       String
+  persian      String
+  article      String?
+  plural       String?
+  partOfSpeech String?
+  level        String   @default("A1")
+  example      String?
+  exampleFa    String?
+  ipa          String?  // تلفظ IPA
+  audioUrl     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userWords UserWord[]
+
+  @@index([german])
+  @@index([level])
+  @@unique([german, article])
+}
+
+// ─── UserWord (لغات ذخیره‌شده‌ی کاربر) ──────
+// status: "learning" | "learned" | "unknown"
+model UserWord {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wordId    String
+  word      Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  status    String   @default("learning")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, wordId])
+  @@index([userId])
+  @@index([status])
+}
