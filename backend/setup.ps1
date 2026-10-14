@@ -1,17 +1,13 @@
-# ═══════════════════════════════════════════
-# LINGO Backend — Setup Script (PowerShell)
-# ═══════════════════════════════════════════
-# این اسکریپت همه‌چیز رو از صفر راه‌اندازی می‌کنه:
-#   1. نصب پکیج‌ها
-#   2. ساخت .env با JWT secrets تصادفی
-#   3. ساخت Prisma Client
-#   4. ساخت دیتابیس SQLite
-#   5. پر کردن دیتابیس با لغات اولیه
+# LINGO Backend - Setup Script (PowerShell)
+# This script automates:
+#   1. npm install
+#   2. Create .env with random JWT secrets
+#   3. Generate Prisma Client
+#   4. Create SQLite database
+#   5. Seed with sample words
 #
-# استفاده:
-#   PowerShell رو باز کن، به پوشه‌ی backend برو، بعد:
+# Usage (run from backend folder):
 #   .\setup.ps1
-# ═══════════════════════════════════════════
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -19,79 +15,78 @@ Set-Location $scriptDir
 
 function Write-Step($msg) {
     Write-Host ""
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+    Write-Host "========================================" -ForegroundColor DarkGray
     Write-Host "  $msg" -ForegroundColor Cyan
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor DarkGray
+    Write-Host "========================================" -ForegroundColor DarkGray
 }
 
 function Write-OK($msg) {
-    Write-Host "  ✓ $msg" -ForegroundColor Green
+    Write-Host "  [OK] $msg" -ForegroundColor Green
 }
 
 function Write-Warn($msg) {
-    Write-Host "  ⚠ $msg" -ForegroundColor Yellow
+    Write-Host "  [!]  $msg" -ForegroundColor Yellow
 }
 
 function Write-Err($msg) {
-    Write-Host "  ✗ $msg" -ForegroundColor Red
+    Write-Host "  [X]  $msg" -ForegroundColor Red
 }
 
-# ─── بررسی Node.js ────────────────────────
-Write-Step "بررسی Node.js"
+# --- 0. Check Node.js ---
+Write-Step "Checking Node.js"
 try {
     $nodeVersion = node -v
     $npmVersion = npm -v
     Write-OK "Node.js: $nodeVersion"
     Write-OK "npm: v$npmVersion"
 } catch {
-    Write-Err "Node.js نصب نیست. از https://nodejs.org دانلود و نصب کن."
+    Write-Err "Node.js is not installed. Download from https://nodejs.org"
     exit 1
 }
 
-# ─── بررسی اتصال به npm registry ─────────
-Write-Step "بررسی اتصال به npm registry"
-$env:NPM_CONFIG_REGISTRY = $null  # پاک‌سازی registry سفارشی اگه هست
+# --- 0b. Check npm registry reachability ---
+Write-Step "Checking npm registry"
+$env:NPM_CONFIG_REGISTRY = $null
 $npmPing = npm ping 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Warn "npm registry در دسترس نیست."
+    Write-Warn "npm registry is NOT reachable."
     Write-Host ""
-    Write-Host "  اگه فیلترشکن داری، اول این رو بزن:" -ForegroundColor Yellow
+    Write-Host "  If you have a VPN/proxy, run this first:" -ForegroundColor Yellow
     Write-Host "    cd .." -ForegroundColor Cyan
     Write-Host "    .\enable-proxy.ps1" -ForegroundColor Cyan
     Write-Host "    cd backend" -ForegroundColor Cyan
     Write-Host "    .\setup.ps1" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  اگه فیلترشکن نداری، این رو امتحان کن:" -ForegroundColor Yellow
+    Write-Host "  If you don't have a VPN, try a mirror:" -ForegroundColor Yellow
     Write-Host "    npm config set registry https://registry.npmmirror.com" -ForegroundColor Cyan
-    Write-Host "    (mirror چینی — معمولاً از ایران کار می‌کنه)" -ForegroundColor DarkGray
     Write-Host ""
     exit 1
 }
-Write-OK "npm registry در دسترسه."
+Write-OK "npm registry is reachable."
 
-# ─── ۱. نصب پکیج‌ها ───────────────────────
-Write-Step "نصب پکیج‌ها (npm install)"
+# --- 1. Install dependencies ---
+Write-Step "Installing packages (npm install)"
 if (Test-Path "node_modules") {
-    Write-Warn "node_modules از قبل وجود دارد. اگه می‌خوای پاک‌سازی کنی، اول این رو بزن:"
+    Write-Warn "node_modules already exists. To clean it, run:"
     Write-Host "      Remove-Item -Recurse -Force node_modules, package-lock.json" -ForegroundColor DarkYellow
-    Write-Host "  ادامه با نصب..." -ForegroundColor Cyan
+    Write-Host "  Continuing with install..." -ForegroundColor Cyan
 }
 npm install
 if ($LASTEXITCODE -ne 0) {
-    Write-Err "نصب پکیج‌ها ناموفق بود."
+    Write-Err "npm install failed."
     exit 1
 }
-Write-OK "پکیج‌ها نصب شدند."
+Write-OK "Packages installed."
 
-# ─── ۲. ساخت .env ────────────────────────
-Write-Step "ساخت .env با JWT secrets تصادفی"
+# --- 2. Create .env ---
+Write-Step "Creating .env with random JWT secrets"
 
 if (Test-Path ".env") {
-    Write-Warn ".env از قبل وجود دارد. پرش نمی‌کنم."
-    Write-Host "  اگه می‌خوای از نو ساخته بشه، اول این رو بزن:"
+    Write-Warn ".env already exists. Skipping."
+    Write-Host "  To regenerate, delete it first:" -ForegroundColor DarkYellow
     Write-Host "      Remove-Item .env" -ForegroundColor DarkYellow
 } else {
-    # تولید JWT secrets (64 بایت hex)
+    # Generate 64-byte hex secrets
     $accessSecret = -join ((1..64) | ForEach-Object {
         '{0:x2}' -f (Get-Random -Maximum 256)
     })
@@ -99,55 +94,55 @@ if (Test-Path ".env") {
         '{0:x2}' -f (Get-Random -Maximum 256)
     })
 
-    # کپی از .env.example و جایگزینی
+    # Copy .env.example and replace placeholders
     Copy-Item .env.example .env
     (Get-Content .env) -replace 'CHANGE_ME_TO_A_RANDOM_64_BYTE_HEX_STRING', $accessSecret `
                        -replace 'CHANGE_ME_TO_ANOTHER_RANDOM_64_BYTE_HEX_STRING', $refreshSecret `
                        | Set-Content .env
 
-    Write-OK ".env ساخته شد."
+    Write-OK ".env created."
     Write-Host "  JWT_ACCESS_SECRET:  $($accessSecret.Substring(0, 16))..." -ForegroundColor DarkGray
     Write-Host "  JWT_REFRESH_SECRET: $($refreshSecret.Substring(0, 16))..." -ForegroundColor DarkGray
 }
 
-# ─── ۳. Prisma Client ────────────────────
-Write-Step "تولید Prisma Client"
+# --- 3. Prisma Client ---
+Write-Step "Generating Prisma Client"
 npx prisma generate
 if ($LASTEXITCODE -ne 0) {
-    Write-Err "Prisma generate ناموفق بود."
+    Write-Err "Prisma generate failed."
     exit 1
 }
-Write-OK "Prisma Client ساخته شد."
+Write-OK "Prisma Client generated."
 
-# ─── ۴. ساخت دیتابیس ─────────────────────
-Write-Step "ساخت دیتابیس SQLite"
+# --- 4. Create database ---
+Write-Step "Creating SQLite database"
 npx prisma db push --skip-generate
 if ($LASTEXITCODE -ne 0) {
-    Write-Err "ساخت دیتابیس ناموفق بود."
+    Write-Err "Database creation failed."
     exit 1
 }
-Write-OK "دیتابیس ساخته شد: dev.db"
+Write-OK "Database created: dev.db"
 
-# ─── ۵. Seed لغات اولیه ─────────────────
-Write-Step "پر کردن دیتابیس با لغات اولیه"
+# --- 5. Seed sample words ---
+Write-Step "Seeding database with sample words"
 npx tsx prisma/seed.ts
 if ($LASTEXITCODE -ne 0) {
-    Write-Warn "Seed ناموفق بود (ممکنه قبلاً انجام شده باشه)."
+    Write-Warn "Seed failed (might already be done)."
 } else {
-    Write-OK "۱۰ لغت آلمانی اضافه شد."
+    Write-OK "10 sample German words added."
 }
 
-# ─── پایان ────────────────────────────────
+# --- Done ---
 Write-Host ""
-Write-Host "════════════════════════════════════════" -ForegroundColor Green
-Write-Host "  🎉 راه‌اندازی کامل شد!" -ForegroundColor Green
-Write-Host "════════════════════════════════════════" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "  Setup complete!" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "حالا می‌تونی سرور رو اجرا کنی:" -ForegroundColor White
+Write-Host "Now start the server with:" -ForegroundColor White
 Write-Host "  npm run dev" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "سرور روی http://localhost:4000 بالا میاد." -ForegroundColor White
+Write-Host "Server runs on http://localhost:4000" -ForegroundColor White
 Write-Host ""
-Write-Host "برای تست، توی مرورگر بزن:" -ForegroundColor White
+Write-Host "Test it in your browser:" -ForegroundColor White
 Write-Host "  http://localhost:4000/api/health" -ForegroundColor Cyan
 Write-Host ""

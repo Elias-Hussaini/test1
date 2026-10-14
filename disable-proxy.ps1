@@ -1,10 +1,7 @@
-# ═══════════════════════════════════════════
-# LINGO — Disable Proxy (PowerShell)
-# ═══════════════════════════════════════════
-# این اسکریپت پروکسی رو از npm, git, و env vars پاک می‌کنه.
-# ═══════════════════════════════════════════
+# LINGO - Disable Proxy (PowerShell)
+# Removes proxy from env vars, npm, and git.
 
-# ─── ۱. پاک‌سازی env vars ─────────────────────────────────────────
+# --- 1. Clear env vars ---
 $env:HTTP_PROXY  = $null
 $env:HTTPS_PROXY = $null
 $env:ALL_PROXY   = $null
@@ -12,17 +9,17 @@ $env:http_proxy  = $null
 $env:https_proxy = $null
 $env:all_proxy   = $null
 
-# ─── ۲. پاک‌سازی npm config ───────────────────────────────────────
+# --- 2. Clear npm config ---
 npm config delete proxy
 npm config delete https-proxy
 
-# ─── ۳. پاک‌سازی git config ───────────────────────────────────────
+# --- 3. Clear git config ---
 git config --global --unset http.proxy 2>$null
 git config --global --unset https.proxy 2>$null
 
-# ─── ۴. تأیید ──────────────────────────────────────────────────────
+# --- 4. Confirm ---
 Write-Host ""
-Write-Host "════════════════════════════════════════" -ForegroundColor Yellow
-Write-Host "  ✓ پروکسی غیرفعال شد" -ForegroundColor Yellow
-Write-Host "════════════════════════════════════════" -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Yellow
+Write-Host "  Proxy disabled" -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Yellow
 Write-Host ""
