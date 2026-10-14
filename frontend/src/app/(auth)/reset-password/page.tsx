@@ -1,19 +1,18 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Check } from "lucide-react";
 import { motion } from "framer-motion";
 import { PasswordInput } from "@/components/auth/auth-input";
 import { AuthButton } from "@/components/auth/auth-button";
 import { OtpInput } from "@/components/auth/otp-input";
 import { authApi } from "@/lib/api";
-import { Check } from "lucide-react";
 
 type Stage = "code" | "password" | "done";
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter();
   const params = useSearchParams();
   const email = params.get("email") ?? "";
@@ -231,7 +230,7 @@ export default function ResetPasswordPage() {
   );
 }
 
-function PasswordRule({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+function PasswordRule({ ok, children }: { ok: boolean; children: ReactNode }) {
   return (
     <div className={`flex items-center gap-1.5 ${ok ? "text-success" : ""}`}>
       <span
@@ -243,5 +242,19 @@ function PasswordRule({ ok, children }: { ok: boolean; children: React.ReactNode
       </span>
       {children}
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="glass-strong rounded-3xl p-8 text-center">
+          <span className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
   );
 }

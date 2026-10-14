@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mail, ArrowLeft, ShieldCheck, User, Check } from "lucide-react";
@@ -228,7 +228,7 @@ export default function RegisterPage() {
   );
 }
 
-function PasswordRule({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+function PasswordRule({ ok, children }: { ok: boolean; children: ReactNode }) {
   return (
     <div className={`flex items-center gap-1.5 ${ok ? "text-success" : ""}`}>
       <span

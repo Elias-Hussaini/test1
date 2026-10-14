@@ -2,16 +2,36 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, BookOpen, Brain, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 
+const features = [
+  {
+    title: "واژه‌نامه هوشمند",
+    description: "واژگان آلمانی را با ترجمه، تلفظ و مثال واقعی یاد بگیر",
+    Icon: BookOpen,
+  },
+  {
+    title: "معلم هوش مصنوعی",
+    description: "هر زمان سؤالی داشتی، با هوش مصنوعی مکالمه کن",
+    Icon: Brain,
+  },
+  {
+    title: "یادگیری با دوستان",
+    description: "با دوستانت واژه‌ها و پیشرفتت را به اشتراک بگذار",
+    Icon: Users,
+  },
+];
+
+const stats = [
+  { value: "۴ سطح", label: "از A1 تا B2" },
+  { value: "۳ آرتیکل", label: "der, die, das" },
+  { value: "۴ حالت", label: "دستوری آلمانی" },
+];
+
 /**
  * Auth Layout — Lumora-inspired dark glassmorphism
- * - پنل چپ: برندینگ + ویژگی‌ها (فقط دسکتاپ)
- * - پنل راست: فرم
- * - پس‌زمینه با orbs و aurora ملایم
- * - روی موبایل فقط فرم
  */
 export default function AuthLayout({
   children,
@@ -20,7 +40,6 @@ export default function AuthLayout({
 }) {
   const pathname = usePathname();
 
-  // متن و ویژگی‌ها بر اساس صفحه‌ی فعلی
   const isLogin = pathname?.includes("/login");
   const isRegister = pathname?.includes("/register");
   const isForgot = pathname?.includes("/forgot-password");
@@ -46,10 +65,7 @@ export default function AuthLayout({
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 overflow-hidden"
       >
-        {/* Aurora */}
         <div className="aurora fade-bottom absolute inset-0 opacity-60 dark:opacity-100" />
-
-        {/* Orbs */}
         <span className="orb orb-a" />
         <span className="orb orb-b" />
         <span className="orb orb-c" />
@@ -104,7 +120,7 @@ export default function AuthLayout({
       {/* Main — دو ستونه در دسکتاپ */}
       <main className="relative z-10 flex flex-1 items-stretch justify-center px-4 pb-8 sm:px-6 lg:px-8">
         <div className="grid w-full max-w-6xl grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-16">
-          {/* Left side — برندینگ و ویژگی‌ها (فقط دسکتاپ) */}
+          {/* Left side — برندینگ (فقط دسکتاپ) */}
           <motion.section
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -125,7 +141,6 @@ export default function AuthLayout({
               تعاملی و معلم هوش مصنوعی، مسیر یادگیری را برایت هموار می‌کند.
             </p>
 
-            {/* ویژگی‌ها */}
             <ul className="mt-10 grid gap-4">
               {features.map((f) => (
                 <li key={f.title} className="flex items-start gap-4">
@@ -140,7 +155,6 @@ export default function AuthLayout({
               ))}
             </ul>
 
-            {/* آمار */}
             <div className="mt-10 flex items-center gap-8">
               {stats.map((s) => (
                 <div key={s.label}>
@@ -167,29 +181,3 @@ export default function AuthLayout({
     </div>
   );
 }
-
-import { BookOpen, Brain, Sparkles as SparklesIcon, Users } from "lucide-react";
-
-const features = [
-  {
-    title: "واژه‌نامه هوشمند",
-    description: "واژگان آلمانی را با ترجمه، تلفظ و مثال واقعی یاد بگیر",
-    Icon: BookOpen,
-  },
-  {
-    title: "معلم هوش مصنوعی",
-    description: "هر زمان سؤالی داشتی، با هوش مصنوعی مکالمه کن",
-    Icon: Brain,
-  },
-  {
-    title: "یادگیری با دوستان",
-    description: "با دوستانت واژه‌ها و پیشرفتت را به اشتراک بگذار",
-    Icon: Users,
-  },
-];
-
-const stats = [
-  { value: "۴ سطح", label: "از A1 تا B2" },
-  { value: "۳ آرتیکل", label: "der, die, das" },
-  { value: "۴ حالت", label: "دستوری آلمانی" },
-];
