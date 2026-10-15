@@ -52,6 +52,8 @@ admin/
 │   │   ├── layout.tsx       ← RTL + theme init
 │   │   ├── page.tsx         ← Main app (login/dashboard/users/...)
 │   │   └── globals.css      ← Design System
+│   ├── hooks/
+│   │   └── use-toast.ts
 │   ├── lib/
 │   │   ├── api.ts           ← API client (auth, users, dictionary)
 │   │   ├── admin-store.ts   ← Zustand (auth state)
@@ -71,12 +73,10 @@ admin/
 │   │   │       ├── users-view.tsx
 │   │   │       ├── user-detail-view.tsx
 │   │   │       └── dictionary-view.tsx
-│   │   └── hooks/           ← useToast etc.
 │   └── types/
 ├── package.json
 ├── tsconfig.json
 ├── next.config.ts
-├── tailwind.config.ts
 ├── postcss.config.mjs
 └── components.json
 ```
