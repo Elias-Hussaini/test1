@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { ArrowRight, Sparkles, BookOpen, Brain, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { AuthHydrationGate } from "@/components/auth/auth-hydration-gate";
 
 const features = [
   {
@@ -59,7 +60,8 @@ export default function AuthLayout({
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background">
+    <AuthHydrationGate>
+      <div className="relative flex min-h-screen flex-col overflow-hidden bg-background">
       {/* پس‌زمینه‌ی زینتی — orbs */}
       <div
         aria-hidden="true"
@@ -178,6 +180,7 @@ export default function AuthLayout({
           </motion.section>
         </div>
       </main>
-    </div>
+      </div>
+    </AuthHydrationGate>
   );
 }

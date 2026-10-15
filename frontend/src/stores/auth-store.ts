@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { authApi, type AuthUser } from "@/lib/api";
 
 type AuthState = {
@@ -25,6 +25,37 @@ type AuthState = {
   verifyEmail: (code: string) => Promise<{ success: boolean }>;
   loadUser: () => Promise<void>;
   clearError: () => void;
+};
+
+/**
+ * SSR-safe storage: فقط در محیط مرورگر از localStorage استفاده می‌کنه.
+ * در SSR یک storage خالی برمی‌گردونه که باعث نمی‌شه خطای hydration بده.
+ */
+const ssrSafeStorage = {
+  getItem: (name: string): string | null => {
+    if (typeof window === "undefined") return null;
+    try {
+      return localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: string): void => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(name, value);
+    } catch {
+      // ignore
+    }
+  },
+  removeItem: (name: string): void => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.removeItem(name);
+    } catch {
+      // ignore
+    }
+  },
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -127,7 +158,6 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ loading: true, error: null });
         try {
-          // Use the API with token
           const res = await fetch(
             `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/auth/verify-email`,
             {
@@ -190,6 +220,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "lingo-auth",
+      // skipHydration جلوی خطای hydration mismatch رو می‌گیره
+      // در اولین رندر سمت کلاینت، SSR state نمایش داده می‌شه
+      // بعد از hydration در client، state از localStorage خوانده می‌شه
+      skipHydration: true,
+      storage: createJSONStorage(() => ssrSafeStorage),
       partialize: (s) => ({
         accessToken: s.accessToken,
         user: s.user,
