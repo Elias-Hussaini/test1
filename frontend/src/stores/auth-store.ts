@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { authApi, type AuthUser } from "./api";
+import { authApi, type AuthUser } from "@/lib/api";
 
 type AuthState = {
   user: AuthUser | null;
