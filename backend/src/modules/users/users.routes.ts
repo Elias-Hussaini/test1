@@ -6,8 +6,10 @@ import {
   validateParams,
   validateQuery,
 } from "../../middleware/validate.middleware.js";
-import { sendSuccess } from "../../utils/response.js";
+import { createError, ErrorCodes, sendSuccess } from "../../utils/response.js";
 import {
+  adminGetStats,
+  adminGetUser,
   adminListUsers,
   adminUpdateUser,
   getMyStats,
@@ -88,6 +90,33 @@ export async function registerUsersRoutes(fastify: FastifyInstance): Promise<voi
     },
   );
 
+  // ─── (ادمین) GET /api/admin/stats ─────────
+  fastify.get(
+    "/api/admin/stats",
+    { preHandler: [authenticate, requireRole("admin")] },
+    async (_request, reply) => {
+      const stats = await adminGetStats();
+      return sendSuccess(reply, stats);
+    },
+  );
+
+  // ─── (ادمین) GET /api/admin/users/:id ─────
+  fastify.get(
+    "/api/admin/users/:id",
+    {
+      preHandler: [
+        authenticate,
+        requireRole("admin"),
+        validateParams(z.object({ id: z.string().uuid() })),
+      ],
+    },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const user = await adminGetUser(id);
+      return sendSuccess(reply, user);
+    },
+  );
+
   // ─── (ادمین) PATCH /api/admin/users/:id ────
   fastify.patch(
     "/api/admin/users/:id",
@@ -102,6 +131,19 @@ export async function registerUsersRoutes(fastify: FastifyInstance): Promise<voi
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const input = request.body as z.infer<typeof updateUserSchema>;
+
+      // جلوگیری از قفل‌شدن: ادمین نمی‌تواند نقش یا وضعیت حساب خودش را تغییر دهد
+      if (
+        id === request.user!.sub &&
+        (input.role !== undefined || input.status !== undefined)
+      ) {
+        throw createError(
+          ErrorCodes.AUTH_FORBIDDEN.code,
+          "نقش یا وضعیت حساب خودت را نمی‌توانی تغییر بدهی.",
+          403,
+        );
+      }
+
       const updated = await adminUpdateUser(id, input);
       return sendSuccess(reply, updated);
     },
