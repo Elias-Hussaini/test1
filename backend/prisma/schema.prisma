@@ -131,13 +131,15 @@ model UserWord {
 model VerificationCode {
   id        String   @id @default(uuid())
   userId    String?
-  email     String
-  code      String
+  email     String   // همیشه lowercase
+  /// HMAC-SHA256 کد ۶ رقمی (کد خام هرگز ذخیره نمی‌شود)
+  codeHash  String
   type      String   // "email_verification" | "password_reset"
   expiresAt DateTime
   used      Boolean  @default(false)
+  /// تعداد حدس‌های انجام‌شده؛ بعد از ۵ بار کد باطل می‌شود
+  attempts  Int      @default(0)
   createdAt DateTime @default(now())
 
-  @@index([email, type])
-  @@index([code, type])
+  @@index([email, type, createdAt])
 }
