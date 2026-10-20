@@ -23,7 +23,7 @@ const envSchema = z.object({
 
   // Email (Resend) — optional in dev
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default("LINGO <noreply@lingo.app>"),
+  EMAIL_FROM: z.string().default("LINGO <onboarding@resend.dev>"),
 
   LOG_LEVEL: z
     .enum(["trace", "debug", "info", "warn", "error", "fatal"])

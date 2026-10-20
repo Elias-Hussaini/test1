@@ -25,6 +25,7 @@ import {
 } from "../../services/email.js";
 import { hashPassword } from "../../utils/password.js";
 import { env } from "../../config/env.js";
+import { consumeOtp, issueOtp, normalizeEmail } from "./otp.service.js";
 
 /**
  * ثبت routeهای احراز هویت.
@@ -54,20 +55,9 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         maxAge: env.JWT_REFRESH_TTL,
       });
 
-      // بعد از ثبت‌نام، کد تأیید ایمیل بفرست
-      const code = generateCode();
-      await prisma.verificationCode.create({
-        data: {
-          userId: result.user.id,
-          email: result.user.email,
-          code,
-          type: "email_verification",
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 دقیقه
-        },
-      });
-
-      const template = emailVerificationTemplate(code, result.user.email, result.user.username);
-      await sendEmail(template);
+      // کد تأیید ایمیل؛ در پس‌زمینه ارسال می‌شود تا کندی/خطای ایمیل ثبت‌نام را نشکند.
+      // (کاربر همیشه می‌تواند از «ارسال دوباره» استفاده کند.)
+      void sendVerificationEmail(result.user.id, result.user.email, result.user.username);
 
       return sendSuccess(reply, { ...result, needsVerification: true }, 201);
     },
@@ -169,7 +159,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
       preHandler: validateBody(refreshSchema),
     },
     async (request, reply) => {
-      const { refreshToken: bodyToken } = request.body as { refreshToken: string };
+      const { refreshToken: bodyToken } = request.body as { refreshToken?: string };
       const cookieToken = request.cookies.refresh_token;
       const refreshToken = cookieToken || bodyToken;
 
@@ -228,45 +218,36 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     },
   );
 
-  // ─── POST /api/auth/verify-email ────────
+  // ─── POST /api/auth/verify-email ────
   const verifyEmailSchema = z.object({
-    code: z.string().length(6, "کد باید ۶ رقم باشد."),
+    code: z.string().regex(/^\d{6}$/, "کد باید ۶ رقم باشد."),
   });
 
   fastify.post(
     "/api/auth/verify-email",
     {
       preHandler: [authenticate, validateBody(verifyEmailSchema)],
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
       const { code } = request.body as { code: string };
 
-      const record = await prisma.verificationCode.findFirst({
-        where: {
-          userId: request.user!.sub,
-          code,
-          type: "email_verification",
-          used: false,
-          expiresAt: { gt: new Date() },
-        },
-        orderBy: { createdAt: "desc" },
+      const user = await prisma.user.findUnique({
+        where: { id: request.user!.sub },
+        select: { email: true, isEmailVerified: true },
       });
-
-      if (!record) {
-        throw createError(
-          "VERIFICATION_INVALID",
-          "کد تأیید نامعتبر یا منقضی است.",
-          400,
-        );
+      if (!user) {
+        throw createError(ErrorCodes.RESOURCE_NOT_FOUND.code, "کاربر یافت نشد.", 404);
+      }
+      if (user.isEmailVerified) {
+        return sendSuccess(reply, { success: true, alreadyVerified: true });
       }
 
-      // علامت‌گذاری به‌عنوان استفاده‌شده
-      await prisma.verificationCode.update({
-        where: { id: record.id },
-        data: { used: true },
-      });
+      const consumed = await consumeOtp({ email: user.email, type: "email_verification", code });
+      if (!consumed) {
+        throw createError("VERIFICATION_INVALID", "کد نامعتبر یا منقضی است. کد جدید بگیر و دوباره امتحان کن.", 400);
+      }
 
-      // به‌روزرسانی کاربر
       await prisma.user.update({
         where: { id: request.user!.sub },
         data: { isEmailVerified: true },
@@ -281,12 +262,12 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     "/api/auth/resend-verification",
     {
       preHandler: authenticate,
-      config: { rateLimit: { max: 3, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
       const user = await prisma.user.findUnique({
         where: { id: request.user!.sub },
-        select: { email: true, username: true, isEmailVerified: true },
+        select: { id: true, email: true, username: true, isEmailVerified: true },
       });
 
       if (!user) {
@@ -296,21 +277,17 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
         return sendSuccess(reply, { success: true, alreadyVerified: true });
       }
 
-      const code = generateCode();
-      await prisma.verificationCode.create({
-        data: {
-          userId: request.user!.sub,
-          email: user.email,
-          code,
-          type: "email_verification",
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-        },
-      });
+      const outcome = await sendVerificationEmail(user.id, user.email, user.username);
+      if (outcome.status === "cooldown") {
+        throw createError(
+          "OTP_COOLDOWN",
+          `برای ارسال دوباره ${outcome.retryAfterSeconds} ثانیه صبر کن.`,
+          429,
+          { retryAfterSeconds: outcome.retryAfterSeconds },
+        );
+      }
 
-      const template = emailVerificationTemplate(code, user.email, user.username);
-      await sendEmail(template);
-
-      return sendSuccess(reply, { success: true });
+      return sendSuccess(reply, { success: true, cooldownSeconds: 60 });
     },
   );
 
@@ -323,41 +300,35 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     "/api/auth/forgot-password",
     {
       preHandler: validateBody(forgotPasswordSchema),
-      config: { rateLimit: { max: 3, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
       const { email } = request.body as { email: string };
 
       const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
-        select: { id: true, email: true, username: true },
+        where: { email: normalizeEmail(email) },
+        select: { id: true, email: true },
       });
 
-      // برای جلوگیری از user enumeration، همیشه موفق برمی‌گردونیم
-      // حتی اگه کاربر نباشه.
+      // ضد user-enumeration: پاسخ و زمان پاسخ برای ایمیل موجود و ناموجود یکسان است
+      // (ایمیل در پس‌زمینه ارسال می‌شود و cooldown هم بیرون نشان داده نمی‌شود).
       if (user) {
-        const code = generateCode();
-        await prisma.verificationCode.create({
-          data: {
-            userId: user.id,
-            email: user.email,
-            code,
-            type: "password_reset",
-            expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-          },
-        });
-
-        const template = passwordResetTemplate(code, user.email);
-        await sendEmail(template);
+        void (async () => {
+          const issued = await issueOtp({ userId: user.id, email: user.email, type: "password_reset" });
+          if (issued.status === "issued") {
+            await sendEmail(passwordResetTemplate(issued.code, user.email));
+          }
+        })().catch((err) => console.error("[FORGOT_PASSWORD_ERROR]", err));
       }
 
-      return sendSuccess(reply, { success: true });
+      return sendSuccess(reply, { success: true, cooldownSeconds: 60 });
     },
   );
 
   // ─── POST /api/auth/reset-password ─────
   const resetPasswordSchema = z.object({
-    code: z.string().length(6, "کد باید ۶ رقم باشد."),
+    email: z.string().email("ایمیل نامعتبر است."),
+    code: z.string().regex(/^\d{6}$/, "کد باید ۶ رقم باشد."),
     newPassword: z
       .string()
       .min(env.PASSWORD_MIN_LENGTH, `رمز باید حداقل ${env.PASSWORD_MIN_LENGTH} کاراکتر باشد.`)
@@ -371,53 +342,52 @@ export async function registerAuthRoutes(fastify: FastifyInstance): Promise<void
     "/api/auth/reset-password",
     {
       preHandler: validateBody(resetPasswordSchema),
-      config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
-      const { code, newPassword } = request.body as {
+      const { email, code, newPassword } = request.body as {
+        email: string;
         code: string;
         newPassword: string;
       };
 
-      const record = await prisma.verificationCode.findFirst({
-        where: {
-          code,
-          type: "password_reset",
-          used: false,
-          expiresAt: { gt: new Date() },
-        },
-        orderBy: { createdAt: "desc" },
-      });
-
-      if (!record || !record.userId) {
-        throw createError(
-          "RESET_INVALID",
-          "کد نامعتبر یا منقضی است.",
-          400,
-        );
+      const consumed = await consumeOtp({ email, type: "password_reset", code });
+      if (!consumed || !consumed.userId) {
+        throw createError("RESET_INVALID", "کد نامعتبر یا منقضی است. کد جدید بگیر و دوباره امتحان کن.", 400);
       }
 
-      // به‌روزرسانی رمز
       const passwordHash = await hashPassword(newPassword);
-      await prisma.user.update({
-        where: { id: record.userId },
-        data: { passwordHash },
-      });
+      await prisma.$transaction([
+        // رسیدن کد به ایمیل، مالکیت ایمیل را هم ثابت می‌کند
+        prisma.user.update({
+          where: { id: consumed.userId },
+          data: { passwordHash, isEmailVerified: true },
+        }),
+        // همه‌ی نشست‌های قبلی بسته می‌شوند (اگر کسی رمز را داشت، بیرون می‌افتد)
+        prisma.refreshToken.updateMany({
+          where: { userId: consumed.userId, revoked: false },
+          data: { revoked: true },
+        }),
+      ]);
 
-      // علامت‌گذاری کد به‌عنوان استفاده‌شده
-      await prisma.verificationCode.update({
-        where: { id: record.id },
-        data: { used: true },
-      });
-
+      reply.clearCookie("refresh_token", { path: "/api/auth" });
       return sendSuccess(reply, { success: true });
     },
   );
 }
 
-/**
- * تولید کد ۶ رقمی.
- */
-function generateCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+/** صدور و ارسال کد تأیید ایمیل. خطای ارسال لاگ می‌شود ولی throw نمی‌کند. */
+async function sendVerificationEmail(
+  userId: string,
+  email: string,
+  username: string,
+): Promise<{ status: "sent" } | { status: "cooldown"; retryAfterSeconds: number }> {
+  try {
+    const issued = await issueOtp({ userId, email, type: "email_verification" });
+    if (issued.status === "cooldown") return issued;
+    await sendEmail(emailVerificationTemplate(issued.code, email, username));
+  } catch (err) {
+    console.error("[VERIFICATION_EMAIL_ERROR]", err);
+  }
+  return { status: "sent" };
 }
