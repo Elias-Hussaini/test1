@@ -47,39 +47,37 @@ NEXT_PUBLIC_API_URL=http://localhost:4000
 
 ```
 admin/
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx       ← RTL + theme init
-│   │   ├── page.tsx         ← Main app (login/dashboard/users/...)
-│   │   └── globals.css      ← Design System
-│   ├── hooks/
-│   │   └── use-toast.ts
-│   ├── lib/
-│   │   ├── api.ts           ← API client (auth, users, dictionary)
-│   │   ├── admin-store.ts   ← Zustand (auth state)
-│   │   ├── theme.ts         ← Theme init script
-│   │   └── utils.ts         ← cn() helper
-│   ├── components/
-│   │   ├── ui/              ← shadcn/ui components
-│   │   ├── admin/           ← Admin-specific components
-│   │   │   ├── admin-login.tsx
-│   │   │   ├── admin-sidebar.tsx
-│   │   │   ├── admin-topbar.tsx
-│   │   │   ├── logo.tsx
-│   │   │   ├── theme-toggle.tsx
-│   │   │   ├── badges.tsx
-│   │   │   └── views/
-│   │   │       ├── dashboard-view.tsx
-│   │   │       ├── users-view.tsx
-│   │   │       ├── user-detail-view.tsx
-│   │   │       └── dictionary-view.tsx
-│   └── types/
-├── package.json
-├── tsconfig.json
-├── next.config.ts
-├── postcss.config.mjs
-└── components.json
+├── public/fonts/               ← Vazirmatn (لوکال، بدون وابستگی به CDN)
+└── src/
+    ├── app/
+    │   ├── layout.tsx          ← RTL، فونت، اسکریپت تم
+    │   ├── login/page.tsx      ← ورود
+    │   └── (panel)/            ← همه‌ی صفحات پشت گارد ادمین
+    │       ├── layout.tsx      ← AdminShell (گارد + سایدبار + نوار بالا)
+    │       ├── page.tsx        ← داشبورد (/)
+    │       ├── users/          ← فهرست (/users) و جزئیات (/users/[id])
+    │       ├── dictionary/     ← واژه‌نامه
+    │       └── settings/       ← حساب، تم، وضعیت بک‌اند
+    ├── components/
+    │   ├── ui/                 ← dialog, dropdown-menu, toast (shadcn)
+    │   └── admin/
+    │       ├── common/         ← Button/فیلدها، حالت‌ها، صفحه‌بندی، تأیید
+    │       ├── views/          ← محتوای هر صفحه
+    │       └── ...             ← shell, sidebar, topbar, login-form
+    ├── hooks/                  ← useApi, useDebouncedValue, useToast
+    └── lib/
+        ├── api.ts              ← کلاینت API (refresh خودکار و تک‌درخواستی)
+        ├── token-store.ts      ← access در حافظه، refresh در sessionStorage
+        ├── session-store.ts    ← وضعیت نشست (بدون persist)
+        ├── format.ts           ← عدد و تاریخ فارسی
+        └── theme.ts            ← تم روشن/تاریک
 ```
+
+### نکات امنیتی
+
+- access token فقط در حافظه‌ی JS است و refresh token در `sessionStorage` (با بستن تب پاک می‌شود)؛ هیچ توکنی در `localStorage` نیست.
+- گارد صفحه‌ها فقط تجربه‌ی کاربری است. امنیت واقعی سمت بک‌اند است: هر endpoint ادمین نقش را چک می‌کند.
+- راه‌حل نهایی برای توکن‌ها کوکی HttpOnly است (نیاز به تغییر در بک‌اند).
 
 ## 🎨 Design System
 

@@ -1,276 +1,221 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  Users,
-  BookOpen,
-  TrendingUp,
-  Wallet,
-  ArrowUpRight,
-  Activity,
-} from "lucide-react";
-import { useAdminStore } from "@/lib/admin-store";
-import { adminUsersApi, dictionaryApi, type AdminUser, type Word } from "@/lib/api";
+import Link from "next/link";
+import { ArrowLeft, BookOpen, GraduationCap, UserPlus, Users } from "lucide-react";
+import { useApi } from "@/hooks/use-api";
+import { adminStatsApi, adminUsersApi, type AdminStats } from "@/lib/api";
+import { faDayMonth, faNumber, faRelative } from "@/lib/format";
+import { useSession } from "@/lib/session-store";
+import { cn } from "@/lib/utils";
+import { RoleBadge, StatusBadge } from "../badges";
+import { PageHeader, Panel } from "../common/page-header";
+import { StatCard } from "../common/stat-card";
+import { EmptyState, ErrorState, Skeleton } from "../common/states";
 
-type Stats = {
-  totalUsers: number;
-  activeUsers: number;
-  blockedUsers: number;
-  totalWords: number;
-  recentUsers: AdminUser[];
-  recentWords: Word[];
-  loading: boolean;
-  error: string | null;
-};
+const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
 
 export function DashboardView() {
-  const { accessToken, openUserDetail } = useAdminStore();
-  const [stats, setStats] = useState<Stats>({
-    totalUsers: 0,
-    activeUsers: 0,
-    blockedUsers: 0,
-    totalWords: 0,
-    recentUsers: [],
-    recentWords: [],
-    loading: true,
-    error: null,
-  });
+  const username = useSession((s) => s.user?.username);
+  const stats = useApi((signal) => adminStatsApi.get(signal), []);
+  const recent = useApi((signal) => adminUsersApi.list({ page: 1, limit: 5 }, signal), []);
 
-  useEffect(() => {
-    if (!accessToken) return;
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        setStats((s) => ({ ...s, loading: true, error: null }));
-
-        const [usersResp, wordsResp] = await Promise.all([
-          adminUsersApi.list(accessToken, { page: 1, limit: 5 }),
-          dictionaryApi.search(accessToken, { page: 1, limit: 5 }),
-        ]);
-
-        if (cancelled) return;
-
-        setStats({
-          totalUsers: usersResp.pagination.total,
-          activeUsers: usersResp.users.filter((u) => u.status === "active").length,
-          blockedUsers: usersResp.users.filter((u) => u.status === "blocked").length,
-          totalWords: wordsResp.pagination.total,
-          recentUsers: usersResp.users,
-          recentWords: wordsResp.words,
-          loading: false,
-          error: null,
-        });
-      } catch (err) {
-        const error = err as { message?: string };
-        if (!cancelled) {
-          setStats((s) => ({
-            ...s,
-            loading: false,
-            error: error.message ?? "خطا در بارگذاری آمار",
-          }));
-        }
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken]);
-
-  if (stats.loading) {
-    return (
-      <div className="space-y-6">
-        <div className="h-32 rounded-2xl bg-muted animate-pulse" />
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-32 rounded-2xl bg-muted animate-pulse" />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="h-64 rounded-2xl bg-muted animate-pulse" />
-          <div className="h-64 rounded-2xl bg-muted animate-pulse" />
-        </div>
-      </div>
-    );
-  }
-
-  if (stats.error) {
-    return (
-      <div className="rounded-2xl border border-danger/30 bg-danger/5 p-8 text-center">
-        <p className="text-sm font-semibold text-danger">{stats.error}</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-3 rounded-lg border border-danger/30 px-3 py-1.5 text-sm hover:bg-danger/10"
-        >
-          تلاش مجدد
-        </button>
-      </div>
-    );
-  }
-
-  const cards = [
-    {
-      label: "کل کاربران",
-      value: stats.totalUsers.toLocaleString("fa-IR"),
-      Icon: Users,
-      tint: "bg-primary/15 text-primary border-primary/30",
-    },
-    {
-      label: "کاربران فعال",
-      value: stats.activeUsers.toLocaleString("fa-IR"),
-      Icon: TrendingUp,
-      tint: "bg-success/15 text-success border-success/30",
-    },
-    {
-      label: "کل واژه‌ها",
-      value: stats.totalWords.toLocaleString("fa-IR"),
-      Icon: BookOpen,
-      tint: "bg-secondary-c/15 text-secondary-c border-secondary-c/30",
-    },
-    {
-      label: "کاربران مسدود",
-      value: stats.blockedUsers.toLocaleString("fa-IR"),
-      Icon: Wallet,
-      tint: "bg-warning/15 text-warning border-warning/30",
-    },
-  ];
+  const data = stats.data;
 
   return (
-    <div className="space-y-6">
-      {/* Welcome */}
-      <div
-        className="relative overflow-hidden rounded-2xl border border-primary/15 p-6 sm:p-8"
-        style={{
-          background:
-            "linear-gradient(135deg, rgba(117, 103, 248, 0.08), rgba(40, 199, 232, 0.04))",
-        }}
-      >
-        <p className="text-xs font-bold text-primary">خوش آمدید 👋</p>
-        <h2 className="mt-1 text-xl font-black sm:text-2xl">
-          نمای کلی پلتفرم LINGO
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          وضعیت کاربران، واژه‌ها و فعالیت‌ها در یک نگاه
-        </p>
-      </div>
+    <>
+      <PageHeader title={username ? `سلام ${username} 👋` : "داشبورد"} description="نمای کلی پلتفرم LINGO؛ همه‌ی عددها مستقیم از دیتابیس خوانده می‌شوند." />
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {cards.map((c) => (
-          <div key={c.label} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-muted-foreground">{c.label}</p>
-                <p className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
-                  {c.value}
-                </p>
+      {stats.error ? (
+        <ErrorState message={stats.error} onRetry={stats.reload} />
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard label="کل کاربران" value={faNumber(data?.users.total)} hint={data ? `${faNumber(data.users.verified)} ایمیل تأییدشده` : undefined} icon={Users} loading={stats.loading && !data} />
+            <StatCard label="ثبت‌نام ۷ روز اخیر" value={faNumber(data?.users.newLast7Days)} hint="کاربر جدید" icon={UserPlus} tone="cyan" loading={stats.loading && !data} />
+            <StatCard label="کلمات واژه‌نامه" value={faNumber(data?.words.total)} hint="در دیتابیس سیستم" icon={BookOpen} tone="warning" loading={stats.loading && !data} />
+            <StatCard
+              label="کلمات یادگرفته‌شده"
+              value={faNumber(data?.learning.learnedWords)}
+              hint={data ? `از ${faNumber(data.learning.savedWords)} کلمه‌ی ذخیره‌شده` : undefined}
+              icon={GraduationCap}
+              tone="success"
+              loading={stats.loading && !data}
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel title="ثبت‌نام‌های ۱۴ روز اخیر" description="تعداد کاربران جدید در هر روز (UTC)" className="lg:col-span-2">
+              <div className="p-5">{data ? <SignupChart signups={data.signups} /> : <Skeleton className="h-52 w-full" />}</div>
+            </Panel>
+
+            <Panel title="وضعیت حساب‌ها">
+              <div className="space-y-4 p-5">
+                {data ? <StatusBreakdown users={data.users} /> : <Skeleton className="h-40 w-full" />}
               </div>
-              <span
-                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${c.tint}`}
-              >
-                <c.Icon className="h-6 w-6" />
-              </span>
-            </div>
+            </Panel>
           </div>
-        ))}
-      </div>
 
-      {/* Recent users + words */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Recent users */}
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-bold">کاربران اخیر</h3>
-              <p className="text-xs text-muted-foreground">جدیدترین کاربران ثبت‌نام‌شده</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => useAdminStore.getState().setView("users")}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel title="کلمات به تفکیک سطح" className="lg:col-span-1">
+              <div className="space-y-3 p-5">
+                {data ? <LevelBars byLevel={data.words.byLevel} total={data.words.total} /> : <Skeleton className="h-44 w-full" />}
+              </div>
+            </Panel>
+
+            <Panel
+              title="جدیدترین کاربران"
+              className="lg:col-span-2"
+              actions={
+                <Link href="/users" className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+                  همه‌ی کاربران
+                  <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
+                </Link>
+              }
             >
-              مشاهده همه
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </button>
+              {recent.error ? (
+                <div className="p-5">
+                  <ErrorState message={recent.error} onRetry={recent.reload} />
+                </div>
+              ) : recent.loading && !recent.data ? (
+                <div className="space-y-3 p-5">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : recent.data && recent.data.users.length > 0 ? (
+                <ul className="divide-y divide-border">
+                  {recent.data.users.map((user) => (
+                    <li key={user.id}>
+                      <Link href={`/users/${user.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/50">
+                        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary-c text-sm font-bold text-white">
+                          {user.username.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-bold">{user.username}</span>
+                          <span dir="ltr" className="block truncate text-right text-xs text-muted-foreground">
+                            {user.email}
+                          </span>
+                        </span>
+                        <span className="hidden items-center gap-2 sm:flex">
+                          <RoleBadge role={user.role} />
+                          <StatusBadge status={user.status} />
+                        </span>
+                        <span className="w-24 shrink-0 text-left text-xs text-muted-foreground">{faRelative(user.createdAt)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState icon={Users} title="هنوز کاربری ثبت‌نام نکرده" />
+              )}
+            </Panel>
           </div>
-          {stats.recentUsers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">هنوز کاربری ثبت‌نام نکرده است.</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {stats.recentUsers.map((u) => (
-                <li
-                  key={u.id}
-                  className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
-                >
-                  <span
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                    style={{
-                      backgroundImage: "linear-gradient(135deg, var(--primary), var(--secondary-c))",
-                    }}
-                  >
-                    {(u.profile?.firstName ?? u.username).charAt(0)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">
-                      {u.profile?.firstName ?? u.username}{" "}
-                      {u.profile?.lastName ?? ""}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground" dir="ltr">
-                      {u.email}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openUserDetail(u.id)}
-                    className="rounded-lg border border-border px-2.5 py-1 text-xs hover:border-primary/40 hover:text-primary"
-                  >
-                    مشاهده
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
-
-        {/* Recent words */}
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-bold">واژه‌های اخیر</h3>
-              <p className="text-xs text-muted-foreground">آخرین واژه‌های اضافه‌شده</p>
-            </div>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </div>
-          {stats.recentWords.length === 0 ? (
-            <p className="text-sm text-muted-foreground">هنوز واژه‌ای اضافه نشده است.</p>
-          ) : (
-            <ul className="space-y-2">
-              {stats.recentWords.map((w) => (
-                <li
-                  key={w.id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background/40 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold" dir="ltr" lang="de">
-                      {w.article ? <span className="text-accent">{w.article} </span> : null}
-                      {w.german}
-                    </p>
-                    <p className="truncate text-[11px] text-muted-foreground">{w.persian}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">
-                    {w.level}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
 
-export default DashboardView;
+/* ─── نمودار ثبت‌نام (ستونی، بدون کتابخانه) ─── */
+
+function SignupChart({ signups }: { signups: AdminStats["signups"] }) {
+  const max = Math.max(1, ...signups.map((s) => s.count));
+  const total = signups.reduce((sum, s) => sum + s.count, 0);
+
+  return (
+    <figure>
+      <div
+        role="img"
+        aria-label={`ثبت‌نام ۱۴ روز اخیر: مجموعاً ${faNumber(total)} کاربر`}
+        className="flex h-48 items-end gap-1.5 sm:gap-2"
+      >
+        {signups.map((point) => {
+          const height = point.count === 0 ? 3 : Math.max(8, Math.round((point.count / max) * 100));
+          return (
+            <div key={point.date} className="group relative flex h-full flex-1 flex-col justify-end" title={`${faDayMonth(point.date)}: ${faNumber(point.count)} ثبت‌نام`}>
+              <span className="mb-1 text-center text-[10px] font-bold text-muted-foreground opacity-0 group-hover:opacity-100">{faNumber(point.count)}</span>
+              <div
+                className={cn(
+                  "w-full rounded-t-md",
+                  point.count === 0 ? "bg-foreground/10" : "bg-gradient-to-t from-primary to-secondary-c group-hover:brightness-110",
+                )}
+                style={{ height: `${height}%` }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <figcaption className="mt-2 flex justify-between text-[10px] text-muted-foreground">
+        <span>{faDayMonth(signups[0]?.date ?? "")}</span>
+        <span>{faDayMonth(signups[signups.length - 1]?.date ?? "")}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+/* ─── وضعیت و نقش‌ها ─── */
+
+function StatusBreakdown({ users }: { users: AdminStats["users"] }) {
+  const rows = [
+    { label: "فعال", value: users.active, color: "bg-success" },
+    { label: "معلق", value: users.suspended, color: "bg-warning" },
+    { label: "مسدود", value: users.blocked, color: "bg-danger" },
+  ];
+  const roles: Array<[string, string]> = [
+    ["user", "کاربر"],
+    ["premium", "پرمیوم"],
+    ["guest", "مهمان"],
+    ["admin", "مدیر"],
+  ];
+
+  return (
+    <>
+      <ul className="space-y-3">
+        {rows.map((row) => (
+          <li key={row.label}>
+            <div className="mb-1 flex justify-between text-xs">
+              <span className="font-semibold">{row.label}</span>
+              <span className="tabular-nums text-muted-foreground">{faNumber(row.value)}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-foreground/10">
+              <div className={cn("h-full rounded-full", row.color)} style={{ width: `${users.total ? (row.value / users.total) * 100 : 0}%` }} />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="border-t border-border pt-4">
+        <p className="mb-2 text-xs font-bold text-muted-foreground">نقش‌ها</p>
+        <div className="flex flex-wrap gap-2">
+          {roles.map(([key, label]) => (
+            <span key={key} className="inline-flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1 text-xs">
+              {label}
+              <b className="tabular-nums">{faNumber(users.byRole[key] ?? 0)}</b>
+            </span>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function LevelBars({ byLevel, total }: { byLevel: Record<string, number>; total: number }) {
+  const max = Math.max(1, ...LEVELS.map((level) => byLevel[level] ?? 0));
+  if (total === 0) return <EmptyState icon={BookOpen} title="واژه‌نامه خالی است" description="از بخش واژه‌نامه اولین کلمه را اضافه کن." />;
+
+  return (
+    <ul className="space-y-3">
+      {LEVELS.map((level) => {
+        const count = byLevel[level] ?? 0;
+        return (
+          <li key={level} className="flex items-center gap-3">
+            <span className="w-7 text-xs font-black text-primary">{level}</span>
+            <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-foreground/10">
+              <div className="h-full rounded-full bg-gradient-to-l from-primary to-secondary-c" style={{ width: `${(count / max) * 100}%` }} />
+            </div>
+            <span className="w-10 text-left text-xs tabular-nums text-muted-foreground">{faNumber(count)}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}

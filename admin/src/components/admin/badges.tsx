@@ -1,7 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type UserStatus = "active" | "blocked" | "suspended";
-type UserRole = "user" | "guest" | "premium" | "admin";
+import type { UserRole, UserStatus } from "@/lib/api";
 
 type StatusBadgeProps = {
   status: UserStatus;

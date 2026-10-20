@@ -1,369 +1,204 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  MoreVertical,
-  Eye,
-  Ban,
-  Unlock,
-} from "lucide-react";
-import { useAdminStore } from "@/lib/admin-store";
-import { adminUsersApi, type AdminUser } from "@/lib/api";
-import { StatusBadge, RoleBadge } from "../badges";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
+import { useCallback, useState } from "react";
+import Link from "next/link";
+import { Ellipsis, MailCheck, MailQuestion, Search, Users } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useApi, useDebouncedValue } from "@/hooks/use-api";
+import { adminUsersApi, type AdminUser, type UserRole, type UserStatus } from "@/lib/api";
+import { faDate, faNumber } from "@/lib/format";
+import { RoleBadge, StatusBadge } from "../badges";
+import { FilterSelect, SearchInput } from "../common/controls";
+import { ConfirmDialog } from "../common/confirm-dialog";
+import { PageHeader, Panel } from "../common/page-header";
+import { Pagination } from "../common/pagination";
+import { EmptyState, ErrorState, Skeleton } from "../common/states";
+import { actionsFor, useUserActions } from "../user-actions";
 
-type FilterStatus = "all" | "active" | "blocked" | "suspended";
-type FilterRole = "all" | "user" | "guest" | "premium" | "admin";
+const PAGE_SIZE = 15;
 
 export function UsersView() {
-  const { accessToken, openUserDetail } = useAdminStore();
-  const { toast } = useToast();
-
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
-  const [roleFilter, setRoleFilter] = useState<FilterRole>("all");
+  const [status, setStatus] = useState<UserStatus | "">("");
+  const [role, setRole] = useState<UserRole | "">("");
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const debouncedSearch = useDebouncedValue(search.trim());
 
-  const [data, setData] = useState<{
-    users: AdminUser[];
-    total: number;
-    totalPages: number;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, loading, reload, setData } = useApi(
+    (signal) => adminUsersApi.list({ page, limit: PAGE_SIZE, search: debouncedSearch, status, role }, signal),
+    [page, debouncedSearch, status, role],
+  );
 
-  useEffect(() => {
-    if (!accessToken) return;
-    let cancelled = false;
-
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const result = await adminUsersApi.list(accessToken, {
-          page,
-          limit: pageSize,
-          search: search || undefined,
-          status: statusFilter === "all" ? undefined : statusFilter,
-          role: roleFilter === "all" ? undefined : roleFilter,
-        });
-        if (!cancelled) {
-          setData({
-            users: result.users,
-            total: result.pagination.total,
-            totalPages: result.pagination.totalPages,
-          });
-        }
-      } catch (err) {
-        const error = err as { message?: string };
-        if (!cancelled) setError(error.message ?? "خطا در بارگذاری کاربران");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    const t = setTimeout(load, 250); // debounce
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [accessToken, page, search, statusFilter, roleFilter]);
-
-  const handleUpdate = async (
-    userId: string,
-    updates: { role?: string; status?: string },
-  ) => {
-    if (!accessToken) return;
-    try {
-      await adminUsersApi.update(accessToken, userId, updates);
-      toast({
-        title: "به‌روزرسانی شد",
-        description: "وضعیت کاربر با موفقیت تغییر کرد.",
-      });
-      // Reload current page
-      setData((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          users: prev.users.map((u) =>
-            u.id === userId
-              ? {
-                  ...u,
-                  role: updates.role ?? u.role,
-                  status: updates.status ?? u.status,
-                }
-              : u,
-          ),
-        };
-      });
-    } catch (err) {
-      const error = err as { message?: string };
-      toast({
-        title: "خطا",
-        description: error.message ?? "به‌روزرسانی ناموفق بود.",
-        variant: "destructive",
-      });
-    }
-  };
+  const handleUpdated = useCallback(
+    (id: string, fields: Partial<AdminUser>) =>
+      setData((current) => ({ ...current, users: current.users.map((user) => (user.id === id ? { ...user, ...fields } : user)) })),
+    [setData],
+  );
+  const actions = useUserActions(handleUpdated);
 
   const users = data?.users ?? [];
-  const totalPages = data?.totalPages ?? 1;
+  const filtersActive = Boolean(debouncedSearch || status || role);
 
   return (
-    <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1 sm:max-w-xs">
-            <Search
-              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <input
-              type="search"
+    <>
+      <PageHeader title="کاربران" description={data ? `${faNumber(data.pagination.total)} حساب ${filtersActive ? "مطابق فیلترها" : "در سیستم"}` : "مدیریت حساب‌های LINGO"} />
+
+      <Panel>
+        <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
+          <div className="relative min-w-[14rem] flex-1">
+            <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchInput
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
+              onChange={(event) => {
+                setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="جستجو..."
-              className="h-10 w-full rounded-lg border border-input bg-background pr-10 pl-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              placeholder="جستجو با ایمیل یا نام کاربری…"
+              aria-label="جستجوی کاربر"
+              className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value as FilterStatus);
-                setPage(1);
-              }}
-              className="h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="all">همه وضعیت‌ها</option>
-              <option value="active">فعال</option>
-              <option value="blocked">مسدود</option>
-              <option value="suspended">معلق</option>
-            </select>
-            <select
-              value={roleFilter}
-              onChange={(e) => {
-                setRoleFilter(e.target.value as FilterRole);
-                setPage(1);
-              }}
-              className="h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="all">همه نقش‌ها</option>
-              <option value="user">کاربر</option>
-              <option value="guest">مهمان</option>
-              <option value="premium">پرمیوم</option>
-              <option value="admin">مدیر</option>
-            </select>
-          </div>
+          <FilterSelect
+            label="فیلتر وضعیت"
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value as UserStatus | "");
+              setPage(1);
+            }}
+          >
+            <option value="">همه‌ی وضعیت‌ها</option>
+            <option value="active">فعال</option>
+            <option value="suspended">معلق</option>
+            <option value="blocked">مسدود</option>
+          </FilterSelect>
+          <FilterSelect
+            label="فیلتر نقش"
+            value={role}
+            onChange={(event) => {
+              setRole(event.target.value as UserRole | "");
+              setPage(1);
+            }}
+          >
+            <option value="">همه‌ی نقش‌ها</option>
+            <option value="user">کاربر</option>
+            <option value="premium">پرمیوم</option>
+            <option value="guest">مهمان</option>
+            <option value="admin">مدیر</option>
+          </FilterSelect>
         </div>
-      </div>
 
-      {/* Count */}
-      <p className="text-sm text-muted-foreground">
-        {data ? `${data.total.toLocaleString("fa-IR")} کاربر` : "در حال بارگذاری..."}
-      </p>
-
-      {/* Table (desktop) */}
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/30 text-right">
-                <th className="px-4 py-3 font-semibold text-muted-foreground">کاربر</th>
-                <th className="px-4 py-3 font-semibold text-muted-foreground">نقش</th>
-                <th className="px-4 py-3 font-semibold text-muted-foreground">سطح</th>
-                <th className="px-4 py-3 font-semibold text-muted-foreground">وضعیت</th>
-                <th className="px-4 py-3 font-semibold text-muted-foreground">عضویت</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                    در حال بارگذاری...
-                  </td>
-                </tr>
-              ) : error ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-danger">
-                    {error}
-                  </td>
-                </tr>
-              ) : users.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                    هیچ کاربری یافت نشد.
-                  </td>
-                </tr>
-              ) : (
-                users.map((u) => (
-                  <tr key={u.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => openUserDetail(u.id)}
-                        className="flex items-center gap-3 text-right"
-                      >
-                        <span
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                          style={{
-                            backgroundImage: "linear-gradient(135deg, var(--primary), var(--secondary-c))",
-                          }}
-                        >
-                          {(u.profile?.firstName ?? u.username).charAt(0)}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate font-semibold">
-                            {u.profile?.firstName ?? u.username}{" "}
-                            {u.profile?.lastName ?? ""}
-                          </span>
-                          <span className="block truncate text-xs text-muted-foreground" dir="ltr">
-                            {u.email}
-                          </span>
-                        </span>
-                      </button>
-                    </td>
-                    <td className="px-4 py-3"><RoleBadge role={u.role as "user" | "guest" | "premium" | "admin"} /></td>
-                    <td className="px-4 py-3 font-mono text-xs font-bold">{u.profile?.level ?? "A1"}</td>
-                    <td className="px-4 py-3"><StatusBadge status={u.status as "active" | "blocked" | "suspended"} /></td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {new Date(u.createdAt).toLocaleDateString("fa-IR")}
-                    </td>
-                    <td className="px-4 py-3">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted"
-                            aria-label="عملیات"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => openUserDetail(u.id)}>
-                            <Eye className="h-4 w-4" />
-                            مشاهده پروفایل
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {u.status === "blocked" ? (
-                            <DropdownMenuItem
-                              onClick={() => handleUpdate(u.id, { status: "active" })}
-                              className="text-success focus:text-success"
-                            >
-                              <Unlock className="h-4 w-4" />
-                              رفع مسدودیت
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => handleUpdate(u.id, { status: "blocked" })}
-                              className="text-danger focus:text-danger"
-                            >
-                              <Ban className="h-4 w-4" />
-                              مسدود کردن
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
+        {error ? (
+          <div className="p-5">
+            <ErrorState message={error} onRetry={reload} />
+          </div>
+        ) : loading && !data ? (
+          <div className="space-y-3 p-5">
+            {Array.from({ length: 6 }, (_, i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+        ) : users.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title={filtersActive ? "کاربری با این فیلترها پیدا نشد" : "هنوز کاربری وجود ندارد"}
+            description={filtersActive ? "جستجو یا فیلترها را تغییر بده." : undefined}
+          />
+        ) : (
+          <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-right text-xs text-muted-foreground">
+                    <th scope="col" className="px-5 py-3 font-semibold">کاربر</th>
+                    <th scope="col" className="px-3 py-3 font-semibold">نقش</th>
+                    <th scope="col" className="px-3 py-3 font-semibold">وضعیت</th>
+                    <th scope="col" className="hidden px-3 py-3 font-semibold lg:table-cell">سطح</th>
+                    <th scope="col" className="hidden px-3 py-3 font-semibold md:table-cell">عضویت</th>
+                    <th scope="col" className="w-12 px-3 py-3"><span className="sr-only">عملیات</span></th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="divide-y divide-border md:hidden">
-          {loading ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              در حال بارگذاری...
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {users.map((user) => {
+                    const available = actionsFor(user, actions.selfId);
+                    return (
+                      <tr key={user.id} className="hover:bg-muted/40">
+                        <td className="px-5 py-3">
+                          <Link href={`/users/${user.id}`} className="flex items-center gap-3">
+                            <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary-c text-sm font-bold text-white">
+                              {user.username.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="flex items-center gap-1.5 font-bold">
+                                <span className="truncate">{user.username}</span>
+                                {user.isEmailVerified ? (
+                                  <MailCheck aria-label="ایمیل تأییدشده" className="h-3.5 w-3.5 shrink-0 text-success" />
+                                ) : (
+                                  <MailQuestion aria-label="ایمیل تأییدنشده" className="h-3.5 w-3.5 shrink-0 text-warning" />
+                                )}
+                              </span>
+                              <span dir="ltr" className="block truncate text-right text-xs text-muted-foreground">{user.email}</span>
+                            </span>
+                          </Link>
+                        </td>
+                        <td className="px-3 py-3"><RoleBadge role={user.role} /></td>
+                        <td className="px-3 py-3"><StatusBadge status={user.status} /></td>
+                        <td className="hidden px-3 py-3 lg:table-cell">
+                          {user.profile ? (
+                            <span className="text-xs">
+                              <b className="text-primary">{user.profile.level}</b>
+                              <span className="text-muted-foreground"> · {faNumber(user.profile.xp)} XP</span>
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="hidden px-3 py-3 text-xs text-muted-foreground md:table-cell">{faDate(user.createdAt)}</td>
+                        <td className="px-3 py-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label={`عملیات ${user.username}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                              >
+                                <Ellipsis aria-hidden="true" className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-56">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/users/${user.id}`}>مشاهده‌ی پروفایل</Link>
+                              </DropdownMenuItem>
+                              {available.length > 0 ? <DropdownMenuSeparator /> : null}
+                              {available.map((action) => (
+                                <DropdownMenuItem key={action.key} variant={action.tone === "danger" ? "destructive" : "default"} onClick={() => actions.run(user, action)}>
+                                  <action.icon aria-hidden="true" />
+                                  {action.label}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ) : users.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              کاربری یافت نشد.
-            </div>
-          ) : (
-            users.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => openUserDetail(u.id)}
-                className="flex w-full items-center gap-3 p-4 text-right hover:bg-muted/30"
-              >
-                <span
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                  style={{
-                    backgroundImage: "linear-gradient(135deg, var(--primary), var(--secondary-c))",
-                  }}
-                >
-                  {(u.profile?.firstName ?? u.username).charAt(0)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">
-                    {u.profile?.firstName ?? u.username} {u.profile?.lastName ?? ""}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground" dir="ltr">
-                    {u.email}
-                  </p>
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <StatusBadge status={u.status as "active" | "blocked" | "suspended"} />
-                    <RoleBadge role={u.role as "user" | "guest" | "premium" | "admin"} />
-                  </div>
-                </div>
-                <ChevronLeft className="h-4 w-4 text-muted-foreground" />
-              </button>
-            ))
-          )}
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 ? (
-          <div className="flex items-center justify-between border-t border-border p-3 text-sm">
-            <p className="text-muted-foreground">
-              صفحه {page.toLocaleString("fa-IR")} از {totalPages.toLocaleString("fa-IR")}
-            </p>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                disabled={page === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border hover:border-primary/40 disabled:opacity-40"
-                aria-label="صفحه قبل"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border hover:border-primary/40 disabled:opacity-40"
-                aria-label="صفحه بعد"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            </div>
+            <Pagination page={page} totalPages={data?.pagination.totalPages ?? 1} total={data?.pagination.total ?? 0} onChange={setPage} disabled={loading} />
           </div>
-        ) : null}
-      </div>
-    </div>
+        )}
+      </Panel>
+
+      <ConfirmDialog
+        open={actions.pending !== null}
+        onOpenChange={(open) => (open ? undefined : actions.cancelPending())}
+        title={actions.pending?.action.confirm?.title ?? ""}
+        description={actions.pending?.action.confirm?.description ?? ""}
+        confirmLabel={actions.pending?.action.confirm?.confirmLabel ?? "تأیید"}
+        tone={actions.pending?.action.tone === "danger" ? "danger" : "primary"}
+        loading={actions.busy}
+        onConfirm={actions.confirmPending}
+      />
+    </>
   );
 }
-
-export default UsersView;

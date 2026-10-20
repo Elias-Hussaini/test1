@@ -1,136 +1,107 @@
 "use client";
 
-import {
-  LayoutDashboard,
-  Users,
-  BookOpen,
-  Settings,
-  X,
-  LogOut,
-} from "lucide-react";
-import { useAdminStore, type AdminView } from "@/lib/admin-store";
-import { Logo } from "./logo";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { LogOut, X } from "lucide-react";
+import { useSession } from "@/lib/session-store";
 import { cn } from "@/lib/utils";
+import { Logo } from "./logo";
+import { isActive, navItems } from "./nav";
 
-type NavItem = {
-  id: AdminView;
-  label: string;
-  icon: typeof LayoutDashboard;
-  description: string;
-};
+type SidebarProps = { open: boolean; onClose: () => void };
 
-const navItems: NavItem[] = [
-  { id: "dashboard", label: "داشبورد", icon: LayoutDashboard, description: "نمای کلی" },
-  { id: "users", label: "کاربران", icon: Users, description: "مدیریت کاربران" },
-  { id: "dictionary", label: "واژه‌نامه", icon: BookOpen, description: "مدیریت لغات" },
-  { id: "settings", label: "تنظیمات", icon: Settings, description: "تنظیمات سایت" },
-];
-
-export function AdminSidebar() {
-  const { currentView, setView, sidebarOpen, setSidebarOpen, logout, user } = useAdminStore();
+export function AdminSidebar({ open, onClose }: SidebarProps) {
+  const pathname = usePathname();
+  const user = useSession((s) => s.user);
+  const logout = useSession((s) => s.logout);
 
   return (
     <>
-      {/* Mobile overlay */}
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity md:hidden",
-          sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0",
+          "fixed inset-0 z-40 bg-black/55 backdrop-blur-sm transition-opacity md:hidden",
+          open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
-        onClick={() => setSidebarOpen(false)}
+        onClick={onClose}
         aria-hidden="true"
       />
 
       <aside
+        aria-label="منوی اصلی"
         className={cn(
-          "glass fixed inset-y-0 right-0 z-50 flex w-72 flex-col border-l border-sidebar-border transition-transform md:static md:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "translate-x-full md:translate-x-0",
+          "glass fixed inset-y-0 right-0 z-50 flex w-72 flex-col border-l border-sidebar-border transition-transform duration-200 md:sticky md:top-0 md:h-screen md:translate-x-0",
+          open ? "translate-x-0" : "translate-x-full md:translate-x-0",
         )}
       >
-        {/* Header */}
-        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-5">
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-sidebar-border px-5">
           <Logo size="md" showTagline />
           <button
             type="button"
-            onClick={() => setSidebarOpen(false)}
+            onClick={onClose}
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent md:hidden"
             aria-label="بستن منو"
           >
-            <X className="h-5 w-5" />
+            <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-3">
-          <p className="mb-2 mt-2 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            منوی اصلی
-          </p>
+          <p className="mb-2 mt-2 px-3 text-[10px] font-bold tracking-wider text-muted-foreground">منوی اصلی</p>
           <ul className="space-y-1">
             {navItems.map((item) => {
-              const isActive = currentView === item.id || (currentView === "user-detail" && item.id === "users");
+              const active = isActive(pathname, item.href);
               return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setView(item.id);
-                      setSidebarOpen(false);
-                    }}
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    onClick={onClose}
+                    aria-current={active ? "page" : undefined}
                     className={cn(
-                      "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-md shadow-primary/30"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent",
+                      "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium",
+                      active ? "bg-primary text-primary-foreground shadow-md shadow-primary/30" : "text-sidebar-foreground hover:bg-sidebar-accent",
                     )}
                   >
                     <span
                       className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
-                        isActive
-                          ? "bg-white/20"
-                          : "bg-sidebar-accent/50 text-muted-foreground group-hover:text-sidebar-foreground",
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                        active ? "bg-white/20" : "bg-sidebar-accent/60 text-muted-foreground group-hover:text-sidebar-foreground",
                       )}
                     >
-                      <item.icon className="h-4 w-4" aria-hidden="true" />
+                      <item.icon aria-hidden="true" className="h-4 w-4" />
                     </span>
                     <span className="flex flex-col items-start text-right">
                       <span className="leading-tight">{item.label}</span>
-                      <span className={cn(
-                        "text-[10px]",
-                        isActive ? "text-white/70" : "text-muted-foreground",
-                      )}>
-                        {item.description}
-                      </span>
+                      <span className={cn("text-[10px]", active ? "text-white/75" : "text-muted-foreground")}>{item.description}</span>
                     </span>
-                  </button>
+                  </Link>
                 </li>
               );
             })}
           </ul>
         </nav>
 
-        {/* Footer */}
-        <div className="border-t border-sidebar-border p-3">
-          <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent/50 p-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary-c text-sm font-bold text-white">
-              {user?.username?.charAt(0).toUpperCase() ?? "م"}
-            </div>
+        <div className="shrink-0 border-t border-sidebar-border p-3">
+          <div className="flex items-center gap-3 rounded-xl bg-sidebar-accent/60 p-3">
+            <span
+              aria-hidden="true"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary-c text-sm font-bold text-white"
+            >
+              {user?.username.charAt(0).toUpperCase() ?? "؟"}
+            </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">
-                {user?.username ?? "مدیر"}
-              </p>
-              <p className="truncate text-[10px] text-muted-foreground">
-                {user?.email ?? "admin@lingo.app"}
+              <p className="truncate text-sm font-semibold">{user?.username}</p>
+              <p dir="ltr" className="truncate text-right text-[10px] text-muted-foreground">
+                {user?.email}
               </p>
             </div>
             <button
               type="button"
-              onClick={logout}
+              onClick={() => void logout()}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-danger/10 hover:text-danger"
-              aria-label="خروج"
+              aria-label="خروج از حساب"
               title="خروج از حساب"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut aria-hidden="true" className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -138,5 +109,3 @@ export function AdminSidebar() {
     </>
   );
 }
-
-export default AdminSidebar;
