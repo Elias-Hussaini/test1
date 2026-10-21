@@ -1,8 +1,8 @@
-import Link from "next/link";
-import { ArrowLeft, Check, Sparkles } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 import Orbs from "@/components/ui/orbs";
 import Reveal from "@/components/ui/reveal";
 import Typewriter from "@/components/ui/typewriter";
+import { HeroActions } from "./auth-cta";
 import { germanPhrases } from "./data";
 import LearningPreview from "./learning-preview";
 
@@ -46,25 +46,7 @@ export default function HeroSection() {
           </Reveal>
 
           <Reveal delay={0.24}>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <Link
-                href="/register/"
-                className="group glow-soft inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-linear-to-l from-primary to-primary-glow px-7 py-3 font-bold text-white hover:-translate-y-0.5"
-              >
-                شروع رایگان
-                <ArrowLeft
-                  aria-hidden="true"
-                  className="h-5 w-5 transition-transform group-hover:-translate-x-1"
-                />
-              </Link>
-
-              <Link
-                href="/dictionary/"
-                className="glass inline-flex min-h-14 items-center justify-center rounded-2xl px-7 py-3 font-bold hover:-translate-y-0.5 hover:border-primary/50 hover:text-primary"
-              >
-                گشت‌وگذار در واژه‌نامه
-              </Link>
-            </div>
+            <HeroActions />
 
             <ul className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted">
               <li className="flex items-center gap-2">

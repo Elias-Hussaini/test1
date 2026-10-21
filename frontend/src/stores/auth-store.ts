@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { authApi, refreshAccessToken } from "@/lib/api";
+import { ApiError, authApi, refreshAccessToken } from "@/lib/api";
+import { usernameCandidates } from "@/lib/username";
 import {
   clearSession,
   getSessionHint,
@@ -36,6 +37,12 @@ type AuthState = {
     username: string;
     firstName?: string;
     lastName?: string;
+  }) => Promise<{ success: boolean; needsVerification?: boolean }>;
+  /** ثبت‌نام با ایمیل؛ نام کاربری از روی ایمیل ساخته می‌شود (و در صورت تکراری بودن دوباره تلاش می‌شود). */
+  signUp: (data: {
+    email: string;
+    password: string;
+    fullName?: string;
   }) => Promise<{ success: boolean; needsVerification?: boolean }>;
   loginAsGuest: () => Promise<{ success: boolean }>;
   logout: () => Promise<void>;
@@ -170,6 +177,48 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         loading: false,
         error: error.message ?? "خطا در ثبت‌نام.",
       });
+      return { success: false };
+    }
+  },
+
+  signUp: async ({ email, password, fullName }) => {
+    set({ loading: true, error: null });
+
+    // «علی رضایی» → firstName: علی، lastName: رضایی
+    const parts = (fullName ?? "").trim().split(/\s+/).filter(Boolean);
+    const firstName = parts[0]?.slice(0, 50);
+    const lastName = parts.slice(1).join(" ").slice(0, 50) || undefined;
+
+    try {
+      let result: Awaited<ReturnType<typeof authApi.register>> | null = null;
+      let lastError: unknown = null;
+
+      for (const username of usernameCandidates(email)) {
+        try {
+          result = await authApi.register({ email, password, username, firstName, lastName });
+          break;
+        } catch (err) {
+          lastError = err;
+          // فقط تکراری بودن نام کاربری قابل تلاش دوباره است
+          if (!(err instanceof ApiError) || err.code !== "AUTH_USERNAME_TAKEN") throw err;
+        }
+      }
+      if (!result) throw lastError ?? new Error("ثبت‌نام انجام نشد.");
+
+      const user: AuthUser = {
+        id: result.user.id,
+        email: result.user.email,
+        username: result.user.username,
+        role: result.user.role,
+        level: result.user.level,
+      };
+      setAccessToken(result.accessToken);
+      setSessionHint({ userId: user.id, email: user.email, username: user.username, role: user.role });
+      set({ status: "authed", user, loading: false, error: null, needsEmailVerification: true });
+      return { success: true, needsVerification: true };
+    } catch (err) {
+      const error = err as { message?: string };
+      set({ loading: false, error: error.message ?? "خطا در ثبت‌نام." });
       return { success: false };
     }
   },

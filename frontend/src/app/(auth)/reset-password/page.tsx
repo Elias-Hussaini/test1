@@ -1,60 +1,93 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode, Suspense } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, CheckCircle2, Check } from "lucide-react";
-import { motion } from "framer-motion";
-import { PasswordInput } from "@/components/auth/auth-input";
-import { AuthButton } from "@/components/auth/auth-button";
+import { ArrowRight, CircleCheck, MailCheck, ShieldCheck, TriangleAlert } from "lucide-react";
+import { AuthHeading } from "@/components/auth/auth-heading";
+import { PasswordField } from "@/components/auth/field";
+import { FormAlert } from "@/components/auth/form-alert";
+import { GradientButton } from "@/components/auth/gradient-button";
 import { OtpInput } from "@/components/auth/otp-input";
-import { authApi } from "@/lib/api";
+import { isPasswordValid, PasswordRules } from "@/components/auth/password-rules";
+import { StatusIcon } from "@/components/auth/status-icon";
+import { formatCountdown, useCooldown } from "@/components/auth/use-cooldown";
+import { ApiError, authApi } from "@/lib/api";
 
 type Stage = "code" | "password" | "done";
 
-function ResetPasswordContent() {
+function ResetPasswordForm() {
   const router = useRouter();
-  const params = useSearchParams();
-  const email = params.get("email") ?? "";
+  const email = useSearchParams().get("email") ?? "";
 
   const [stage, setStage] = useState<Stage>("code");
   const [code, setCode] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({});
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  // کد همین الان از صفحه‌ی «فراموشی رمز» فرستاده شده
+  const { seconds, start } = useCooldown(60);
 
-  const passwordMismatch = confirmPassword && confirmPassword !== newPassword;
-  const passwordValid = newPassword.length >= 8;
+  if (!email) {
+    return (
+      <section className="auth-card auth-rise text-center">
+        <StatusIcon icon={TriangleAlert} />
+        <div className="mt-6">
+          <AuthHeading title="لینک ناقص است">برای انتخاب رمز جدید، اول ایمیلت را در صفحه‌ی «فراموشی رمز» وارد کن.</AuthHeading>
+        </div>
+        <Link href="/forgot-password/" className="auth-btn mt-7">
+          رفتن به فراموشی رمز
+        </Link>
+      </section>
+    );
+  }
 
-  const handleCodeSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (code.length !== 6) {
-      setError("کد باید ۶ رقم باشد.");
-      return;
-    }
+  const onCodeSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (code.length !== 6) return;
     setError(null);
     setStage("password");
   };
 
-  const handlePasswordSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!passwordValid || passwordMismatch) return;
-
-    if (!email) {
-      setError("ایمیل یافت نشد. لطفاً از صفحه فراموشی رمز شروع کنید.");
-      return;
+  const onResend = async () => {
+    if (seconds > 0 || resending) return;
+    setResending(true);
+    setError(null);
+    try {
+      const result = await authApi.requestPasswordReset(email);
+      start(result.cooldownSeconds ?? 60);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "ارسال دوباره انجام نشد.");
+    } finally {
+      setResending(false);
     }
+  };
+
+  const onPasswordSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (loading) return;
+
+    const found: typeof errors = {};
+    if (!isPasswordValid(password)) found.password = "رمز همه‌ی شرایط زیر را ندارد.";
+    if (confirm !== password) found.confirm = "تکرار رمز با رمز بالا یکی نیست.";
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
 
     setError(null);
     setLoading(true);
-
     try {
-      await authApi.resetPassword({ email, code, newPassword });
+      await authApi.resetPassword({ email, code, newPassword: password });
       setStage("done");
     } catch (err) {
-      const error = err as { message?: string };
-      setError(error.message ?? "خطا در تغییر رمز.");
+      if (err instanceof ApiError && err.code === "RESET_INVALID") {
+        // کد اشتباه یا منقضی: برگرد به مرحله‌ی کد
+        setCode("");
+        setStage("code");
+      }
+      setError(err instanceof ApiError ? err.message : "تغییر رمز انجام نشد. دوباره تلاش کن.");
     } finally {
       setLoading(false);
     }
@@ -62,204 +95,115 @@ function ResetPasswordContent() {
 
   if (stage === "done") {
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="glass-strong rounded-3xl p-6 sm:p-8 text-center"
-      >
-        <span className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-success/15 text-success">
-          <CheckCircle2 className="h-8 w-8" />
-        </span>
-
-        <h2 className="text-2xl font-black">رمز تغییر کرد!</h2>
-        <p className="mt-2 text-sm text-muted">
-          حالا با رمز جدید می‌تونی وارد بشی.
-        </p>
-
+      <section className="auth-card auth-rise text-center">
+        <StatusIcon icon={CircleCheck} />
         <div className="mt-6">
-          <AuthButton
-            onClick={() => router.push("/login/")}
-            className="w-full"
-            icon={<ArrowLeft className="h-5 w-5" />}
-          >
-            ورود به LINGO
-          </AuthButton>
+          <AuthHeading title="رمز جدید ثبت شد">برای امنیت بیشتر از همه‌ی دستگاه‌ها خارج شدی. حالا با رمز جدیدت وارد شو.</AuthHeading>
         </div>
-      </motion.div>
+        <button type="button" onClick={() => router.replace("/login/")} className="auth-btn mt-7">
+          ورود به LINGO
+        </button>
+      </section>
     );
   }
 
   if (stage === "password") {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="glass-strong rounded-3xl p-6 sm:p-8"
-      >
-        <div className="mb-6">
-          <h2 className="text-2xl font-black tracking-tight">رمز جدید</h2>
-          <p className="mt-1.5 text-sm text-muted">
-            یک رمز قوی و جدید وارد کن.
-          </p>
-        </div>
-
-        <form onSubmit={handlePasswordSubmit} className="space-y-4">
-          <PasswordInput
-            label="رمز جدید"
-            placeholder="حداقل ۸ کاراکتر"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-            autoComplete="new-password"
-            error={!passwordValid && newPassword ? "حداقل ۸ کاراکتر" : null}
-          />
-
-          {newPassword ? (
-            <div className="grid grid-cols-2 gap-2 text-xs text-muted">
-              <PasswordRule ok={newPassword.length >= 8}>حداقل ۸ کاراکتر</PasswordRule>
-              <PasswordRule ok={/[a-z]/.test(newPassword)}>حرف کوچک</PasswordRule>
-              <PasswordRule ok={/[A-Z]/.test(newPassword)}>حرف بزرگ</PasswordRule>
-              <PasswordRule ok={/[0-9]/.test(newPassword)}>عدد</PasswordRule>
-            </div>
-          ) : null}
-
-          <PasswordInput
-            label="تکرار رمز جدید"
-            placeholder="رمز را دوباره وارد کن"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            autoComplete="new-password"
-            error={passwordMismatch ? "رمزها مطابقت ندارند" : null}
-          />
-
-          {error ? (
-            <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-              {error}
-            </div>
-          ) : null}
-
-          <AuthButton
-            type="submit"
-            loading={loading}
-            disabled={!passwordValid || !!passwordMismatch}
-            className="w-full"
-            icon={<ArrowLeft className="h-5 w-5" />}
-          >
-            تغییر رمز
-          </AuthButton>
-        </form>
-
+      <section className="auth-card auth-rise">
         <button
           type="button"
           onClick={() => setStage("code")}
-          className="mt-6 inline-flex items-center gap-1.5 text-xs font-medium text-muted hover:text-primary"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-foreground"
         >
-          <ArrowRight className="h-3.5 w-3.5" />
-          تغییر کد
+          <ArrowRight aria-hidden="true" className="h-4 w-4" />
+          بازگشت
         </button>
-      </motion.div>
+
+        <StatusIcon icon={ShieldCheck} />
+        <div className="mt-6">
+          <AuthHeading title="تنظیم رمز عبور جدید">رمز جدیدی انتخاب کن که قبلاً جای دیگری استفاده نکرده‌ای.</AuthHeading>
+        </div>
+
+        <form onSubmit={onPasswordSubmit} noValidate className="mt-7 space-y-4">
+          {error ? <FormAlert>{error}</FormAlert> : null}
+
+          <PasswordField
+            label="رمز عبور جدید"
+            autoFocus
+            autoComplete="new-password"
+            placeholder="رمز عبور جدید"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            error={errors.password}
+          />
+          <PasswordField
+            label="تکرار رمز عبور جدید"
+            autoComplete="new-password"
+            placeholder="تکرار رمز عبور جدید"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            error={errors.confirm}
+          />
+
+          <PasswordRules value={password} />
+
+          <GradientButton loading={loading}>{loading ? "در حال ذخیره…" : "ذخیره تغییرات"}</GradientButton>
+        </form>
+      </section>
     );
   }
 
-  // stage === "code"
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="glass-strong rounded-3xl p-6 sm:p-8"
-    >
-      <div className="mb-6">
-        <h2 className="text-2xl font-black tracking-tight">
-          کد <span className="gradient-text-purple">تأیید</span>
-        </h2>
-        <p className="mt-1.5 text-sm text-muted">
-          کد ۶ رقمی که به ایمیلت ارسال شد را وارد کن.
-        </p>
-        {email ? (
-          <p className="mt-2 text-xs text-muted">
-            ایمیل:{" "}
-            <span dir="ltr" className="font-bold text-foreground">
-              {email}
-            </span>
-          </p>
-        ) : null}
+    <section className="auth-card auth-rise">
+      <Link href="/forgot-password/" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-foreground">
+        <ArrowRight aria-hidden="true" className="h-4 w-4" />
+        بازگشت
+      </Link>
+
+      <StatusIcon icon={MailCheck} />
+      <div className="mt-6">
+        <AuthHeading title="کد بازیابی را وارد کن">
+          کد ۶ رقمی را به{" "}
+          <bdi dir="ltr" className="font-bold text-foreground">
+            {email}
+          </bdi>{" "}
+          فرستادیم. اگر حسابی با این ایمیل باشد، تا چند دقیقه‌ی دیگر می‌رسد.
+        </AuthHeading>
       </div>
 
-      <form onSubmit={handleCodeSubmit} className="space-y-6">
-        <div>
-          <label className="mb-3 block text-sm font-semibold text-foreground">
-            کد تأیید
-          </label>
-          <OtpInput
-            value={code}
-            onChange={setCode}
-            hasError={!!error}
-          />
+      <form onSubmit={onCodeSubmit} className="mt-7 space-y-5">
+        {error ? <FormAlert>{error}</FormAlert> : null}
+
+        <OtpInput value={code} onChange={setCode} hasError={Boolean(error)} />
+
+        <div className="text-center text-sm">
+          {seconds > 0 ? (
+            <span className="text-muted">
+              ارسال مجدد کد <bdi dir="ltr">({formatCountdown(seconds)})</bdi>
+            </span>
+          ) : (
+            <button type="button" onClick={onResend} disabled={resending} className="font-bold text-primary hover:underline disabled:opacity-50">
+              {resending ? "در حال ارسال…" : "ارسال مجدد کد"}
+            </button>
+          )}
         </div>
 
-        {error ? (
-          <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-            {error}
-          </div>
-        ) : null}
-
-        <AuthButton
-          type="submit"
-          disabled={code.length !== 6}
-          className="w-full"
-          icon={<ArrowLeft className="h-5 w-5" />}
-        >
-          ادامه
-        </AuthButton>
+        <GradientButton disabled={code.length !== 6}>ادامه</GradientButton>
       </form>
 
-      <div className="mt-6 flex items-center justify-between text-xs">
-        <Link
-          href="/forgot-password/"
-          className="font-medium text-muted hover:text-primary"
-        >
-          ارسال مجدد کد
+      <p className="mt-6 text-center text-sm">
+        <Link href="/forgot-password/" className="font-bold text-muted hover:text-foreground">
+          تغییر ایمیل
         </Link>
-        <Link
-          href="/login/"
-          className="font-medium text-muted hover:text-primary"
-        >
-          بازگشت به ورود
-        </Link>
-      </div>
-    </motion.div>
-  );
-}
-
-function PasswordRule({ ok, children }: { ok: boolean; children: ReactNode }) {
-  return (
-    <div className={`flex items-center gap-1.5 ${ok ? "text-success" : ""}`}>
-      <span
-        className={`flex h-4 w-4 items-center justify-center rounded-full ${
-          ok ? "bg-success text-white" : "bg-muted text-muted"
-        }`}
-      >
-        {ok ? <Check className="h-2.5 w-2.5" /> : null}
-      </span>
-      {children}
-    </div>
+      </p>
+    </section>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="glass-strong rounded-3xl p-8 text-center">
-          <span className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-        </div>
-      }
-    >
-      <ResetPasswordContent />
+    <Suspense fallback={null}>
+      <ResetPasswordForm />
     </Suspense>
   );
 }

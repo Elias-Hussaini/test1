@@ -1,8 +1,7 @@
 import Link from "next/link";
 import Logo from "@/components/ui/logo";
-import ThemeToggle from "@/components/ui/theme-toggle";
 import { landingNavLinks } from "@/config/landing";
-import SiteMobileNav from "./site-mobile-nav";
+import { HeaderActions } from "@/components/features/home/auth-cta";
 
 export default function SiteHeader() {
   return (
@@ -21,28 +20,7 @@ export default function SiteHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-
-          <Link
-            href="/login/"
-            className="hidden rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-foreground/5 sm:inline-flex"
-          >
-            ورود
-          </Link>
-
-          <Link
-            href="/register/"
-            className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/25 hover:-translate-y-0.5 hover:bg-primary-hover"
-          >
-            <span className="sm:hidden">ثبت‌نام</span>
-            <span className="hidden sm:inline">شروع یادگیری</span>
-          </Link>
-
-          <SiteMobileNav
-            links={[...landingNavLinks, { href: "/login/", label: "ورود" }]}
-          />
-        </div>
+        <HeaderActions />
       </div>
     </header>
   );
