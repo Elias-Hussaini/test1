@@ -49,17 +49,17 @@ export function HeroActions() {
       <div className="mt-9 flex flex-col gap-3 sm:flex-row">
         <Link
           href={member ? "/dashboard/" : "/register/"}
-          className="group glow-soft inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-linear-to-l from-primary to-primary-glow px-7 py-3 font-bold text-white hover:-translate-y-0.5"
+          className="group glow-soft inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-linear-to-l from-primary to-primary-glow px-8 py-3 font-bold text-white hover:-translate-y-0.5"
         >
-          {member ? "ورود به برنامه" : "ساخت حساب رایگان"}
+          {member ? "ورود به برنامه" : "شروع یادگیری رایگان"}
           <ArrowLeft aria-hidden="true" className={`h-5 w-5 ${arrow}`} />
         </Link>
 
         <Link
-          href={member ? "/dictionary/" : "/login/"}
+          href="#features"
           className="glass inline-flex min-h-14 items-center justify-center rounded-2xl px-7 py-3 font-bold hover:-translate-y-0.5 hover:border-primary/50 hover:text-primary"
         >
-          {member ? "واژه‌نامه" : "ورود به حساب"}
+          امکانات LINGO را ببین
         </Link>
       </div>
     </Pending>

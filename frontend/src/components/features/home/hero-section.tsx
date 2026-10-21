@@ -1,68 +1,66 @@
-import { Check, Sparkles } from "lucide-react";
-import Orbs from "@/components/ui/orbs";
 import Reveal from "@/components/ui/reveal";
-import Typewriter from "@/components/ui/typewriter";
 import { HeroActions } from "./auth-cta";
-import { germanPhrases } from "./data";
-import LearningPreview from "./learning-preview";
+import HeroScene from "./hero-scene";
+
+const avatars = [
+  { letter: "م", bg: "linear-gradient(135deg,#8d6bff,#6f6bf8)" },
+  { letter: "س", bg: "linear-gradient(135deg,#28c7e8,#5c86f5)" },
+  { letter: "ن", bg: "linear-gradient(135deg,#f08fc0,#a78bfa)" },
+  { letter: "ر", bg: "linear-gradient(135deg,#5c86f5,#8d6bff)" },
+];
 
 export default function HeroSection() {
   return (
-    <section className="relative">
-      <div
-        aria-hidden="true"
-        className="aurora fade-bottom pointer-events-none absolute inset-0 opacity-60 dark:opacity-100"
-      />
-      <Orbs className="fade-bottom" />
+    <section className="relative isolate">
+      {/* پس‌زمینه‌ی سینمایی: کلیسای جامع کلن و رود راین، شبانگاه */}
+      <div aria-hidden="true" className="lp-hero-bg">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/images/koln-1024.webp"
+          srcSet="/images/koln-640.webp 640w, /images/koln-1024.webp 1024w"
+          sizes="100vw"
+          alt=""
+          width={1024}
+          height={1536}
+          fetchPriority="high"
+        />
+        <div className="lp-hero-veil" />
+      </div>
 
-      <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-14 px-5 pb-20 pt-14 sm:px-8 sm:pb-28 sm:pt-20 lg:grid-cols-2 lg:gap-20">
+      <div className="mx-auto grid max-w-7xl items-center gap-6 px-5 pb-20 pt-10 sm:px-8 sm:pb-28 lg:min-h-[44rem] lg:grid-cols-2 lg:gap-10 lg:pt-14">
         <div>
           <Reveal y={16}>
-            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
-              <Sparkles aria-hidden="true" className="h-4 w-4" />
-              مسیر تو برای یادگیری آلمانی
-            </div>
-          </Reveal>
-
-          <Reveal delay={0.08}>
-            <h1 className="max-w-2xl text-4xl font-black leading-[1.5] tracking-tight sm:text-5xl lg:text-6xl">
-              آلمانی را یاد بگیر،
-              <span className="gradient-text mt-1 block">با روش خودت.</span>
+            <h1 className="max-w-xl text-4xl font-black leading-[1.55] tracking-tight sm:text-5xl lg:text-[3.4rem]">
+              آلمانی را با LINGO،
+              <span className="gradient-text mt-1 block">هوشمندانه یاد بگیر</span>
             </h1>
-          </Reveal>
 
-          <Reveal delay={0.16}>
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <span className="text-sm text-muted">جمله‌ی امروز:</span>
-              <div className="glass min-h-12 rounded-xl px-4 py-2.5 text-lg font-bold text-primary">
-                <Typewriter phrases={germanPhrases} />
-              </div>
-            </div>
-
-            <p className="mt-6 max-w-xl text-base leading-9 text-muted sm:text-lg">
-              از اولین واژه تا مکالمه‌های پیشرفته؛ واژگان، تمرین‌های تعاملی و
-              ابزارهای هوشمند را در یک فضای یادگیری منظم و زیبا تجربه کن.
+            <p className="mt-6 max-w-lg text-base leading-9 text-foreground/75 sm:text-lg">
+              با درس‌های تعاملی، دیکشنری هوشمند و مکالمه با هوش مصنوعی، هر روز
+              یک قدم به تسلط بر زبان آلمانی نزدیک‌تر شو.
             </p>
           </Reveal>
 
-          <Reveal delay={0.24}>
+          <Reveal delay={0.12}>
             <HeroActions />
 
-            <ul className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted">
-              <li className="flex items-center gap-2">
-                <Check aria-hidden="true" className="h-4 w-4 text-success" />
-                مناسب سطوح A1 تا B2
-              </li>
-              <li className="flex items-center gap-2">
-                <Check aria-hidden="true" className="h-4 w-4 text-success" />
-                طراحی فارسی و راست‌چین
-              </li>
-            </ul>
+            <div className="mt-9 flex items-center gap-4">
+              <div aria-hidden="true" className="lp-avatars">
+                {avatars.map((a) => (
+                  <span key={a.letter} style={{ background: a.bg }}>
+                    {a.letter}
+                  </span>
+                ))}
+              </div>
+              <p className="text-sm font-semibold text-foreground/70">
+                مسیر یادگیری خودت را شروع کن
+              </p>
+            </div>
           </Reveal>
         </div>
 
-        <Reveal delay={0.2} y={40}>
-          <LearningPreview />
+        <Reveal delay={0.18} y={30}>
+          <HeroScene />
         </Reveal>
       </div>
     </section>
