@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Mail, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
-import { AuthInput } from "@/components/auth/auth-input";
-import { AuthButton } from "@/components/auth/auth-button";
+import { AuthLayout } from "@/components/auth/AuthLayout";
+import { AuthBrand } from "@/components/auth/AuthBrand";
+import { AuthInput } from "@/components/auth/AuthInput";
+import { AuthButton } from "@/components/auth/AuthButton";
 import { authApi } from "@/lib/api";
 
 type Stage = "request" | "sent";
@@ -28,7 +30,7 @@ export default function ForgotPasswordPage() {
       setStage("sent");
     } catch (err) {
       const error = err as { message?: string };
-      setError(error.message ?? "خطا در ارسال کد.");
+      setError(error.message ?? "خطا در ارسال کد بازیابی");
     } finally {
       setLoading(false);
     }
@@ -36,108 +38,108 @@ export default function ForgotPasswordPage() {
 
   if (stage === "sent") {
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="glass-strong rounded-3xl p-6 sm:p-8 text-center"
-      >
-        <span className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-success/15 text-success">
-          <CheckCircle2 className="h-8 w-8" />
-        </span>
+      <AuthLayout showWelcomePanel={false}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4 }}
+          className="w-full"
+        >
+          <div className="relative rounded-3xl border border-white/10 bg-[#080D25]/80 p-8 text-center shadow-2xl backdrop-blur-xl">
+            {/* Success icon */}
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#28C7E8]/20">
+              <svg className="h-10 w-10 text-[#28C7E8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
 
-        <h2 className="text-2xl font-black">ایمیل را بررسی کن</h2>
-        <p className="mt-2 text-sm text-muted">
-          کد تأیید ۶ رقمی به{" "}
-          <span dir="ltr" className="font-bold text-foreground">
-            {email}
-          </span>{" "}
-          ارسال شد.
-        </p>
+            <h2 className="mb-3 text-2xl font-black text-white">ایمیل ارسال شد</h2>
+            <p className="mb-6 text-sm text-white/70">
+              کد بازیابی به{" "}
+              <span className="font-bold text-white" dir="ltr">
+                {email}
+              </span>{" "}
+              ارسال شد
+            </p>
 
-        <div className="mt-6 space-y-3">
-          <AuthButton
-            onClick={() => router.push(`/reset-password/?email=${encodeURIComponent(email)}`)}
-            className="w-full"
-            icon={<ArrowLeft className="h-5 w-5" />}
-          >
-            ادامه — وارد کردن کد
-          </AuthButton>
+            <AuthButton
+              onClick={() => router.push(`/reset-password?email=${encodeURIComponent(email)}`)}
+              showArrow
+            >
+              ادامه
+            </AuthButton>
 
-          <button
-            type="button"
-            onClick={() => setStage("request")}
-            className="text-xs font-medium text-muted hover:text-primary"
-          >
-            ایمیل اشتباه بود؟ تغییر ایمیل
-          </button>
-        </div>
-
-        <p className="mt-6 text-xs text-muted">
-          کد تا ۱۰ دقیقه معتبر است
-        </p>
-      </motion.div>
+            <button
+              onClick={() => setStage("request")}
+              className="mt-4 text-sm text-white/60 hover:text-white"
+            >
+              تغییر ایمیل
+            </button>
+          </div>
+        </motion.div>
+      </AuthLayout>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="glass-strong rounded-3xl p-6 sm:p-8"
-    >
-      <div className="mb-6">
-        <h2 className="text-2xl font-black tracking-tight">
-          بازیابی <span className="gradient-text-purple">رمز عبور</span>
-        </h2>
-        <p className="mt-1.5 text-sm text-muted">
-          ایمیلت رو وارد کن تا کد تأیید برات بفرستیم.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <AuthInput
-          id="email"
-          type="email"
-          label="ایمیل"
-          placeholder="your@email.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          icon={<Mail className="h-5 w-5" />}
-          dir="ltr"
-          required
-          autoComplete="email"
-          autoFocus
-        />
-
-        {error ? (
-          <motion.div
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger animate-shake"
-          >
-            {error}
-          </motion.div>
-        ) : null}
-
-        <AuthButton
-          type="submit"
-          loading={loading}
-          icon={<ArrowLeft className="h-5 w-5" />}
-          className="w-full"
-        >
-          ارسال کد بازیابی
-        </AuthButton>
-      </form>
-
-      <Link
-        href="/login/"
-        className="mt-6 inline-flex items-center gap-1.5 text-xs font-medium text-muted transition-colors hover:text-primary"
+    <AuthLayout showWelcomePanel={false}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="w-full"
       >
-        <ArrowRight className="h-3.5 w-3.5" />
-        بازگشت به ورود
-      </Link>
-    </motion.div>
+        <div className="relative rounded-3xl border border-white/10 bg-[#080D25]/80 p-8 shadow-2xl backdrop-blur-xl">
+          {/* Back button */}
+          <Link
+            href="/login"
+            className="mb-6 inline-flex items-center gap-2 text-sm text-white/60 hover:text-white"
+          >
+            <ArrowRight className="h-4 w-4" />
+            بازگشت
+          </Link>
+
+          {/* Logo and title */}
+          <div className="mb-8 text-center">
+            <AuthBrand size="medium" className="mb-6" />
+            <h1 className="mb-2 text-2xl font-black text-white">بازیابی رمز عبور</h1>
+            <p className="text-sm text-white/70">
+              ایمیل خود را وارد کنید تا کد بازیابی برایتان ارسال شود
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <AuthInput
+              label="ایمیل یا شماره موبایل"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              icon={Mail}
+              required
+              dir="ltr"
+            />
+
+            {error && (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">
+                {error}
+              </div>
+            )}
+
+            <AuthButton type="submit" loading={loading} showArrow>
+              ارسال لینک بازیابی
+            </AuthButton>
+          </form>
+
+          {/* Footer */}
+          <p className="mt-6 text-center text-sm text-white/50">
+            <Link href="/login" className="font-bold text-[#713CFF] hover:text-[#28C7E8]">
+              بازگشت به ورود
+            </Link>
+          </p>
+        </div>
+      </motion.div>
+    </AuthLayout>
   );
 }

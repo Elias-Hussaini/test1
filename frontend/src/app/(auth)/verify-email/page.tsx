@@ -1,53 +1,187 @@
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
-import Link from "next/link";
+import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, RefreshCw, Mail } from "lucide-react";
 import { motion } from "framer-motion";
-import { AuthButton } from "@/components/auth/auth-button";
-import { OtpInput } from "@/components/auth/otp-input";
+import { Mail } from "lucide-react";
+import { AuthLayout } from "@/components/auth/AuthLayout";
+import { AuthBrand } from "@/components/auth/AuthBrand";
+import { AuthButton } from "@/components/auth/AuthButton";
+import { OTPInput } from "@/components/auth/OTPInput";
 import { useAuthStore } from "@/stores/auth-store";
 import { authApi } from "@/lib/api";
 
 export default function VerifyEmailPage() {
   const router = useRouter();
-  const { status, user, verifyEmail, loading, error, clearError } =
-    useAuthStore();
+  const { status, user, verifyEmail, loading } = useAuthStore();
 
   const [code, setCode] = useState("");
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(60);
   const [resendLoading, setResendLoading] = useState(false);
 
-  // اگه کاربر وارد نشده، برگردان به login
+  // Redirect if not authenticated
   useEffect(() => {
     if (status === "anon") {
-      router.push("/login/");
+      router.push("/login");
     }
   }, [status, router]);
 
-  // cooldown برای resend
+  // Cooldown timer
   useEffect(() => {
     if (resendCooldown > 0) {
-      const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+      return () => clearTimeout(timer);
     }
   }, [resendCooldown]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (code.length !== 6) return;
-    clearError();
+
+    setError("");
     const result = await verifyEmail(code);
+
     if (result.success) {
       setSuccess(true);
-      setTimeout(() => router.push("/dashboard/"), 1500);
+      setTimeout(() => router.push("/dashboard"), 1500);
+    } else {
+      setError("کد تأیید نامعتبر است");
     }
   };
 
   const handleResend = async () => {
-    if (resendCooldown > 0 || status !== "authed") return;
+    if (resendCooldown > 0 || !user?.email) return;
+
+    setResendLoading(true);
+    setError("");
+
+    try {
+      await authApi.resendVerification(user.email);
+      setResendCooldown(60);
+    } catch (err) {
+      setError("خطا در ارسال مجدد کد");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <AuthLayout showWelcomePanel={false}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full text-center"
+        >
+          <div className="relative rounded-3xl border border-white/10 bg-[#080D25]/80 p-8 shadow-2xl backdrop-blur-xl">
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[#28C7E8]/20">
+              <svg className="h-10 w-10 text-[#28C7E8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-black text-white">تأیید شد!</h2>
+            <p className="mt-2 text-sm text-white/70">در حال انتقال به داشبورد...</p>
+          </div>
+        </motion.div>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout showWelcomePanel={false}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="w-full"
+      >
+        <div className="relative rounded-3xl border border-white/10 bg-[#080D25]/80 p-8 shadow-2xl backdrop-blur-xl">
+          {/* Email illustration */}
+          <div className="mb-6 flex justify-center">
+            <div className="relative">
+              <div className="absolute inset-0 animate-pulse rounded-full bg-[#713CFF] opacity-50 blur-2xl" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-[#713CFF]/20">
+                <Mail className="h-10 w-10 text-[#713CFF]" />
+              </div>
+            </div>
+          </div>
+
+          {/* Title */}
+          <div className="mb-8 text-center">
+            <h1 className="mb-2 text-2xl font-black text-white">تأیید ایمیل</h1>
+            <p className="text-sm text-white/70">
+              کد ۶ رقمی به{" "}
+              <span className="font-bold text-white" dir="ltr">
+                {user?.email}
+              </span>{" "}
+              ارسال شد
+            </p>
+          </div>
+
+          {/* OTP Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <OTPInput
+              length={6}
+              value={code}
+              onChange={setCode}
+              error={!!error}
+            />
+
+            {/* Timer and Resend */}
+            <div className="text-center text-sm">
+              {resendCooldown > 0 ? (
+                <p className="text-white/60">
+                  ارسال مجدد در{" "}
+                  <span className="font-bold text-white" dir="ltr">
+                    00:{resendCooldown.toString().padStart(2, "0")}
+                  </span>
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendLoading}
+                  className="font-bold text-[#713CFF] hover:text-[#28C7E8] disabled:opacity-50"
+                >
+                  {resendLoading ? "در حال ارسال..." : "ارسال مجدد کد"}
+                </button>
+              )}
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm font-medium text-red-300">
+                {error}
+              </div>
+            )}
+
+            {/* Submit */}
+            <AuthButton
+              type="submit"
+              loading={loading}
+              disabled={code.length !== 6}
+              showArrow
+            >
+              تأیید
+            </AuthButton>
+          </form>
+
+          {/* Change email */}
+          <p className="mt-6 text-center text-sm text-white/50">
+            <button
+              onClick={() => router.push("/register")}
+              className="font-bold text-[#713CFF] hover:text-[#28C7E8]"
+            >
+              تغییر ایمیل
+            </button>
+          </p>
+        </div>
+      </motion.div>
+    </AuthLayout>
+  );
+}
     setResendLoading(true);
     try {
       const result = await authApi.resendVerification();
