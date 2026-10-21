@@ -41,11 +41,16 @@ function ResetPasswordContent() {
     e.preventDefault();
     if (!passwordValid || passwordMismatch) return;
 
+    if (!email) {
+      setError("ایمیل یافت نشد. لطفاً از صفحه فراموشی رمز شروع کنید.");
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
     try {
-      await authApi.resetPassword({ code, newPassword });
+      await authApi.resetPassword({ email, code, newPassword });
       setStage("done");
     } catch (err) {
       const error = err as { message?: string };
@@ -139,7 +144,7 @@ function ResetPasswordContent() {
           <AuthButton
             type="submit"
             loading={loading}
-            disabled={!passwordValid || passwordMismatch}
+            disabled={!passwordValid || !!passwordMismatch}
             className="w-full"
             icon={<ArrowLeft className="h-5 w-5" />}
           >

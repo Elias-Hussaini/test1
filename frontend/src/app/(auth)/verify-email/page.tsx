@@ -12,7 +12,7 @@ import { authApi } from "@/lib/api";
 
 export default function VerifyEmailPage() {
   const router = useRouter();
-  const { user, accessToken, verifyEmail, loading, error, clearError } =
+  const { status, user, verifyEmail, loading, error, clearError } =
     useAuthStore();
 
   const [code, setCode] = useState("");
@@ -22,10 +22,10 @@ export default function VerifyEmailPage() {
 
   // اگه کاربر وارد نشده، برگردان به login
   useEffect(() => {
-    if (!accessToken) {
+    if (status === "anon") {
       router.push("/login/");
     }
-  }, [accessToken, router]);
+  }, [status, router]);
 
   // cooldown برای resend
   useEffect(() => {
@@ -47,13 +47,22 @@ export default function VerifyEmailPage() {
   };
 
   const handleResend = async () => {
-    if (resendCooldown > 0 || !accessToken) return;
+    if (resendCooldown > 0 || status !== "authed") return;
     setResendLoading(true);
     try {
-      await authApi.resendVerification();
-      setResendCooldown(60);
-    } catch {
-      // ignore
+      const result = await authApi.resendVerification();
+      // بررسی cooldown از سرور
+      if (result.cooldownSeconds) {
+        setResendCooldown(result.cooldownSeconds);
+      } else {
+        setResendCooldown(60);
+      }
+    } catch (err: unknown) {
+      const error = err as { statusCode?: number; details?: { retryAfterSeconds?: number } };
+      // اگر 429 برگشت، cooldown را از details بگیر
+      if (error.statusCode === 429 && error.details?.retryAfterSeconds) {
+        setResendCooldown(error.details.retryAfterSeconds);
+      }
     } finally {
       setResendLoading(false);
     }

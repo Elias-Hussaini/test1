@@ -1,17 +1,34 @@
 "use client";
 
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
-import { authApi, type AuthUser } from "@/lib/api";
+import { authApi, refreshAccessToken } from "@/lib/api";
+import {
+  clearSession,
+  getSessionHint,
+  setAccessToken,
+  setSessionHint,
+  type SessionHint,
+} from "@/lib/token-store";
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  username: string;
+  role: string;
+  level?: string;
+  isEmailVerified?: boolean;
+};
+
+export type SessionStatus = "loading" | "authed" | "anon";
 
 type AuthState = {
+  status: SessionStatus;
   user: AuthUser | null;
-  accessToken: string | null;
-  isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
   needsEmailVerification: boolean;
 
+  restore: () => Promise<void>;
   login: (email: string, password: string) => Promise<{ success: boolean; needsVerification?: boolean }>;
   register: (data: {
     email: string;
@@ -23,212 +40,212 @@ type AuthState = {
   loginAsGuest: () => Promise<{ success: boolean }>;
   logout: () => Promise<void>;
   verifyEmail: (code: string) => Promise<{ success: boolean }>;
-  loadUser: () => Promise<void>;
   clearError: () => void;
 };
 
-/**
- * SSR-safe storage: فقط در محیط مرورگر از localStorage استفاده می‌کنه.
- * در SSR یک storage خالی برمی‌گردونه که باعث نمی‌شه خطای hydration بده.
- */
-const ssrSafeStorage = {
-  getItem: (name: string): string | null => {
-    if (typeof window === "undefined") return null;
-    try {
-      return localStorage.getItem(name);
-    } catch {
-      return null;
-    }
-  },
-  setItem: (name: string, value: string): void => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(name, value);
-    } catch {
-      // ignore
-    }
-  },
-  removeItem: (name: string): void => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.removeItem(name);
-    } catch {
-      // ignore
-    }
-  },
-};
+let restoring: Promise<void> | null = null;
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      accessToken: null,
-      isAuthenticated: false,
-      loading: false,
-      error: null,
-      needsEmailVerification: false,
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  status: "loading",
+  user: null,
+  loading: false,
+  error: null,
+  needsEmailVerification: false,
 
-      login: async (email, password) => {
-        set({ loading: true, error: null });
-        try {
-          const result = await authApi.login(email, password);
-          set({
-            user: result.user,
-            accessToken: result.accessToken,
-            isAuthenticated: true,
-            loading: false,
-            error: null,
-            needsEmailVerification: !result.user.role,
-          });
-          return { success: true };
-        } catch (err) {
-          const error = err as { message?: string; code?: string };
-          set({
-            loading: false,
-            error: error.message ?? "خطا در ورود.",
-          });
-          return { success: false };
-        }
-      },
+  restore: () => {
+    if (get().status !== "loading") return Promise.resolve();
+    if (restoring) return restoring;
 
-      register: async (data) => {
-        set({ loading: true, error: null });
-        try {
-          const result = await authApi.register(data);
-          set({
-            user: result.user,
-            accessToken: result.accessToken,
-            isAuthenticated: true,
-            loading: false,
-            error: null,
-            needsEmailVerification: true,
-          });
-          return { success: true, needsVerification: true };
-        } catch (err) {
-          const error = err as { message?: string; code?: string };
-          set({
-            loading: false,
-            error: error.message ?? "خطا در ثبت‌نام.",
-          });
-          return { success: false };
-        }
-      },
+    restoring = (async () => {
+      const hint = getSessionHint();
+      if (!hint) {
+        set({ status: "anon", user: null });
+        return;
+      }
 
-      loginAsGuest: async () => {
-        set({ loading: true, error: null });
-        try {
-          const result = await authApi.guest();
-          set({
-            user: result.user,
-            accessToken: result.accessToken,
-            isAuthenticated: true,
-            loading: false,
-            error: null,
-          });
-          return { success: true };
-        } catch (err) {
-          const error = err as { message?: string };
-          set({
-            loading: false,
-            error: error.message ?? "خطا در ورود مهمان.",
-          });
-          return { success: false };
-        }
-      },
+      const token = await refreshAccessToken();
+      if (!token) {
+        clearSession();
+        set({ status: "anon", user: null });
+        return;
+      }
 
-      logout: async () => {
-        try {
-          await authApi.logout();
-        } catch {
-          // ignore
-        }
-        set({
-          user: null,
-          accessToken: null,
-          isAuthenticated: false,
-          needsEmailVerification: false,
+      try {
+        const me = await authApi.me();
+        const user: AuthUser = {
+          id: me.id,
+          email: me.email,
+          username: me.username,
+          role: me.role,
+          level: me.profile?.level,
+          isEmailVerified: me.isEmailVerified,
+        };
+        setSessionHint({
+          userId: user.id,
+          email: user.email,
+          username: user.username,
+          role: user.role,
         });
-      },
+        set({
+          status: "authed",
+          user,
+          needsEmailVerification: !me.isEmailVerified,
+        });
+      } catch {
+        clearSession();
+        set({ status: "anon", user: null });
+      }
+    })().finally(() => {
+      restoring = null;
+    });
 
-      verifyEmail: async (code) => {
-        const { accessToken } = get();
-        if (!accessToken) {
-          set({ error: "ابتدا وارد شوید." });
-          return { success: false };
-        }
-        set({ loading: true, error: null });
-        try {
-          const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/auth/verify-email`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({ code }),
-              credentials: "include",
-            },
-          );
-          const json = await res.json();
-          if (!res.ok) {
-            throw new Error(json?.error?.message ?? "خطا در تأیید ایمیل.");
-          }
-          set({
-            needsEmailVerification: false,
-            loading: false,
-          });
-          return { success: true };
-        } catch (err) {
-          const error = err as { message?: string };
-          set({
-            loading: false,
-            error: error.message ?? "خطا در تأیید ایمیل.",
-          });
-          return { success: false };
-        }
-      },
+    return restoring;
+  },
 
-      loadUser: async () => {
-        const { accessToken } = get();
-        if (!accessToken) {
-          set({ isAuthenticated: false });
-          return;
-        }
-        try {
-          const user = await authApi.me(accessToken);
-          set({
-            user: {
-              id: user.id,
-              email: user.email,
-              username: user.username,
-              role: user.role,
-            },
-            isAuthenticated: true,
-            needsEmailVerification: !user.isEmailVerified,
-          });
-        } catch {
-          set({
-            user: null,
-            accessToken: null,
-            isAuthenticated: false,
-          });
-        }
-      },
+  login: async (email, password) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await authApi.login(email, password);
+      const user: AuthUser = {
+        id: result.user.id,
+        email: result.user.email,
+        username: result.user.username,
+        role: result.user.role,
+        level: result.user.level,
+      };
+      setAccessToken(result.accessToken);
+      setSessionHint({
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+      });
+      set({
+        status: "authed",
+        user,
+        loading: false,
+        error: null,
+        needsEmailVerification: false,
+      });
+      return { success: true };
+    } catch (err) {
+      const error = err as { message?: string; code?: string };
+      set({
+        loading: false,
+        error: error.message ?? "خطا در ورود.",
+      });
+      return { success: false };
+    }
+  },
 
-      clearError: () => set({ error: null }),
-    }),
-    {
-      name: "lingo-auth",
-      // skipHydration جلوی خطای hydration mismatch رو می‌گیره
-      // در اولین رندر سمت کلاینت، SSR state نمایش داده می‌شه
-      // بعد از hydration در client، state از localStorage خوانده می‌شه
-      skipHydration: true,
-      storage: createJSONStorage(() => ssrSafeStorage),
-      partialize: (s) => ({
-        accessToken: s.accessToken,
-        user: s.user,
-      }),
-    },
-  ),
-);
+  register: async (data) => {
+    set({ loading: true, error: null });
+    try {
+      const result = await authApi.register(data);
+      const user: AuthUser = {
+        id: result.user.id,
+        email: result.user.email,
+        username: result.user.username,
+        role: result.user.role,
+        level: result.user.level,
+      };
+      setAccessToken(result.accessToken);
+      setSessionHint({
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+      });
+      set({
+        status: "authed",
+        user,
+        loading: false,
+        error: null,
+        needsEmailVerification: true,
+      });
+      return { success: true, needsVerification: true };
+    } catch (err) {
+      const error = err as { message?: string; code?: string };
+      set({
+        loading: false,
+        error: error.message ?? "خطا در ثبت‌نام.",
+      });
+      return { success: false };
+    }
+  },
+
+  loginAsGuest: async () => {
+    set({ loading: true, error: null });
+    try {
+      const result = await authApi.guest();
+      const user: AuthUser = {
+        id: result.user.id,
+        email: result.user.email,
+        username: result.user.username,
+        role: result.user.role,
+        level: result.user.level,
+      };
+      setAccessToken(result.accessToken);
+      setSessionHint({
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+      });
+      set({
+        status: "authed",
+        user,
+        loading: false,
+        error: null,
+        needsEmailVerification: false,
+      });
+      return { success: true };
+    } catch (err) {
+      const error = err as { message?: string };
+      set({
+        loading: false,
+        error: error.message ?? "خطا در ورود مهمان.",
+      });
+      return { success: false };
+    }
+  },
+
+  logout: async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // ignore
+    }
+    clearSession();
+    set({
+      status: "anon",
+      user: null,
+      needsEmailVerification: false,
+    });
+  },
+
+  verifyEmail: async (code) => {
+    if (get().status !== "authed") {
+      set({ error: "ابتدا وارد شوید." });
+      return { success: false };
+    }
+    set({ loading: true, error: null });
+    try {
+      await authApi.verifyEmail({ code });
+      set({
+        needsEmailVerification: false,
+        loading: false,
+      });
+      return { success: true };
+    } catch (err) {
+      const error = err as { message?: string };
+      set({
+        loading: false,
+        error: error.message ?? "خطا در تأیید ایمیل.",
+      });
+      return { success: false };
+    }
+  },
+
+  clearError: () => set({ error: null }),
+}));

@@ -2,185 +2,131 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Sparkles, BookOpen, Brain, Users } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
-import { AuthHydrationGate } from "@/components/auth/auth-hydration-gate";
-
-const features = [
-  {
-    title: "واژه‌نامه هوشمند",
-    description: "واژگان آلمانی را با ترجمه، تلفظ و مثال واقعی یاد بگیر",
-    Icon: BookOpen,
-  },
-  {
-    title: "معلم هوش مصنوعی",
-    description: "هر زمان سؤالی داشتی، با هوش مصنوعی مکالمه کن",
-    Icon: Brain,
-  },
-  {
-    title: "یادگیری با دوستان",
-    description: "با دوستانت واژه‌ها و پیشرفتت را به اشتراک بگذار",
-    Icon: Users,
-  },
-];
-
-const stats = [
-  { value: "۴ سطح", label: "از A1 تا B2" },
-  { value: "۳ آرتیکل", label: "der, die, das" },
-  { value: "۴ حالت", label: "دستوری آلمانی" },
-];
+import Image from "next/image";
 
 /**
- * Auth Layout — Lumora-inspired dark glassmorphism
+ * Auth Layout — Premium Dark Design with Cologne Cathedral
  */
 export default function AuthLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  const pathname = usePathname();
-
-  const isLogin = pathname?.includes("/login");
-  const isRegister = pathname?.includes("/register");
-  const isForgot = pathname?.includes("/forgot-password");
-  const isVerify = pathname?.includes("/verify-email");
-
-  let title = "به LINGO خوش آمدید";
-  let subtitle = "مسیر یادگیری هوشمند زبان آلمانی را آغاز کن";
-  if (isRegister) {
-    title = "همراه LINGO یاد بگیر";
-    subtitle = "حساب کاربری بساز و اولین واژه را همین امروز یاد بگیر";
-  } else if (isVerify) {
-    title = "تأیید ایمیل";
-    subtitle = "برای امنیت حساب، ایمیل خود را تأیید کن";
-  } else if (isForgot) {
-    title = "بازیابی رمز عبور";
-    subtitle = "کد تأیید برایت ارسال می‌کنیم";
-  }
-
   return (
-    <AuthHydrationGate>
-      <div className="relative flex min-h-screen flex-col overflow-hidden bg-background">
-      {/* پس‌زمینه‌ی زینتی — orbs */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 overflow-hidden"
-      >
-        <div className="aurora fade-bottom absolute inset-0 opacity-60 dark:opacity-100" />
-        <span className="orb orb-a" />
-        <span className="orb orb-b" />
-        <span className="orb orb-c" />
-        <span className="orb orb-d" />
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#0a0515]">
+      {/* Animated Background Gradient */}
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1a0b2e] via-[#0a0515] to-[#2d1b4e]" />
 
-        {/* Grid pattern — subtle */}
-        <div
-          className="absolute inset-0 opacity-[0.025] dark:opacity-[0.04]"
-          style={{
-            backgroundImage:
-              "linear-gradient(var(--foreground) 1px, transparent 1px), linear-gradient(90deg, var(--foreground) 1px, transparent 1px)",
-            backgroundSize: "60px 60px",
+        {/* Animated gradient orbs */}
+        <motion.div
+          animate={{
+            scale: [1, 1.2, 1],
+            opacity: [0.3, 0.5, 0.3],
           }}
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-[#7567F8] blur-[120px]"
+        />
+        <motion.div
+          animate={{
+            scale: [1.2, 1, 1.2],
+            opacity: [0.2, 0.4, 0.2],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-[#28C7E8] blur-[120px]"
+        />
+        <motion.div
+          animate={{
+            scale: [1, 1.3, 1],
+            opacity: [0.15, 0.3, 0.15],
+          }}
+          transition={{
+            duration: 12,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+          className="absolute top-1/2 left-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-600 blur-[100px]"
         />
       </div>
 
-      {/* Header — لوگو */}
-      <header className="relative z-10 px-5 py-5 sm:px-8">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
+      {/* Cathedral Background */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-30">
+        <Image
+          src="/cologne-cathedral.svg"
+          alt=""
+          fill
+          className="object-cover object-bottom"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0515] via-[#0a0515]/50 to-transparent" />
+      </div>
+
+      {/* Noise Texture */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.015]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
+      {/* Header */}
+      <header className="relative z-20 px-6 py-8">
+        <div className="mx-auto flex max-w-md items-center justify-between">
           <Link
             href="/"
-            aria-label="صفحه اصلی LINGO"
             className="group flex items-center gap-3"
           >
-            <span className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-primary-glow to-secondary text-xl font-black text-white shadow-lg shadow-primary/30 transition-transform group-hover:scale-105">
-              L
-              <span
-                aria-hidden="true"
-                className="absolute -bottom-1 -left-1 h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-background"
-              />
-            </span>
-            <span>
-              <span className="block text-xl font-black tracking-tight">
+            <motion.div
+              whileHover={{ scale: 1.05, rotate: 5 }}
+              whileTap={{ scale: 0.95 }}
+              className="relative"
+            >
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#7567F8] to-[#28C7E8] opacity-50 blur-xl" />
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7567F8] to-[#28C7E8] text-xl font-black text-white shadow-2xl">
+                L
+              </div>
+            </motion.div>
+            <div>
+              <span className="block text-xl font-black tracking-tight text-white">
                 LINGO
               </span>
-              <span className="block text-[10px] text-muted">
-                یادگیری هوشمند زبان
+              <span className="block text-[10px] font-medium text-white/50">
+                یادگیری زبان آلمانی
               </span>
-            </span>
+            </div>
           </Link>
 
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-primary"
+            className="group flex items-center gap-1.5 text-sm font-medium text-white/60 transition-colors hover:text-white"
           >
-            <ArrowRight className="h-4 w-4" />
-            بازگشت به خانه
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+            بازگشت
           </Link>
         </div>
       </header>
 
-      {/* Main — دو ستونه در دسکتاپ */}
-      <main className="relative z-10 flex flex-1 items-stretch justify-center px-4 pb-8 sm:px-6 lg:px-8">
-        <div className="grid w-full max-w-6xl grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-16">
-          {/* Left side — برندینگ (فقط دسکتاپ) */}
-          <motion.section
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="hidden lg:flex lg:flex-col"
-          >
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
-              <Sparkles className="h-4 w-4" aria-hidden="true" />
-              {title}
-            </div>
-
-            <h1 className="mt-6 text-4xl font-black leading-tight tracking-tight xl:text-5xl">
-              {subtitle}
-            </h1>
-
-            <p className="mt-5 max-w-md text-base leading-9 text-muted">
-              یادگیری زبان آلمانی نباید سخت باشد. LINGO با واژگان هوشمند، تمرین‌های
-              تعاملی و معلم هوش مصنوعی، مسیر یادگیری را برایت هموار می‌کند.
-            </p>
-
-            <ul className="mt-10 grid gap-4">
-              {features.map((f) => (
-                <li key={f.title} className="flex items-start gap-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl glass text-primary">
-                    <f.Icon className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <p className="font-bold">{f.title}</p>
-                    <p className="text-sm text-muted">{f.description}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-10 flex items-center gap-8">
-              {stats.map((s) => (
-                <div key={s.label}>
-                  <p className="text-3xl font-black gradient-text-purple">
-                    {s.value}
-                  </p>
-                  <p className="text-xs text-muted">{s.label}</p>
-                </div>
-              ))}
-            </div>
-          </motion.section>
-
-          {/* Right side — فرم */}
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="flex justify-center lg:justify-start"
-          >
-            <div className="w-full max-w-md">{children}</div>
-          </motion.section>
-        </div>
+      {/* Main Content */}
+      <main className="relative z-10 flex flex-1 items-center justify-center px-4 pb-12">
+        {children}
       </main>
-      </div>
-    </AuthHydrationGate>
+
+      {/* Footer */}
+      <footer className="relative z-10 pb-8 text-center">
+        <p className="text-sm font-medium text-white/40">
+          آلمانی را ساده، هوشمندانه و هیجان‌انگیز یاد بگیر
+        </p>
+      </footer>
+    </div>
   );
 }

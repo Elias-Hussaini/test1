@@ -9,9 +9,9 @@
  *   - refreshToken in HttpOnly cookie (set by backend)
  */
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:4000";
+import { getAccessToken, setAccessToken } from "./token-store";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 export class ApiError extends Error {
   constructor(
@@ -28,14 +28,14 @@ export class ApiError extends Error {
 type FetchOptions = {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
-  token?: string | null;
   query?: Record<string, string | number | boolean | undefined>;
+  /** برای login/refresh که نباید خودکار refresh شوند. */
+  skipAuth?: boolean;
+  signal?: AbortSignal;
 };
 
 function buildUrl(path: string, query?: FetchOptions["query"]): string {
-  const url = new URL(
-    path.startsWith("http") ? path : `${API_BASE}${path}`,
-  );
+  const url = new URL(path.startsWith("http") ? path : `${API_BASE}${path}`);
   if (query) {
     for (const [k, v] of Object.entries(query)) {
       if (v !== undefined && v !== null) {
@@ -46,77 +46,84 @@ function buildUrl(path: string, query?: FetchOptions["query"]): string {
   return url.toString();
 }
 
-/**
- * درخواست اصلی به API.
- * در صورت 401، سعی می‌کند refresh کند.
- */
-export async function apiFetch<T>(
-  path: string,
-  options: FetchOptions = {},
-): Promise<T> {
-  const { method = "GET", body, token, query } = options;
+async function rawRequest<T>(path: string, options: FetchOptions, token: string | null): Promise<T> {
+  const { method = "GET", body, query, signal } = options;
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-
-  let res = await fetch(buildUrl(path, query), {
+  const response = await fetch(buildUrl(path, query), {
     method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: {
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: "include", // برای ارسال cookie refresh_token
+    signal,
   });
 
-  // در صورت 401، یک‌بار refresh کن و دوباره امتحان کن
-  if (res.status === 401 && !path.includes("/auth/")) {
-    const refreshRes = await fetch(`${API_BASE}/api/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-      credentials: "include",
-    });
+  if (response.status === 204) return undefined as T;
 
-    if (refreshRes.ok) {
-      const refreshData = await refreshRes.json();
-      const newToken = refreshData.data?.accessToken;
-      if (newToken) {
-        // retry with new token
-        headers.Authorization = `Bearer ${newToken}`;
-        res = await fetch(buildUrl(path, query), {
-          method,
-          headers,
-          body: body ? JSON.stringify(body) : undefined,
-          credentials: "include",
-        });
-        // Store new token in memory
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("lingo:token-refreshed", {
-              detail: { accessToken: newToken },
-            }),
-          );
-        }
-      }
-    }
-  }
+  const json = (await response.json().catch(() => ({}))) as {
+    data?: T;
+    error?: { code?: string; message?: string; details?: unknown };
+  };
 
-  // 204
-  if (res.status === 204) return undefined as T;
-
-  const json = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    const err = json?.error;
+  if (!response.ok) {
     throw new ApiError(
-      err?.code ?? "UNKNOWN",
-      err?.message ?? `HTTP ${res.status}`,
-      res.status,
-      err?.details,
+      json.error?.code ?? "UNKNOWN",
+      json.error?.message ?? `HTTP ${response.status}`,
+      response.status,
+      json.error?.details,
     );
   }
 
   return json.data as T;
+}
+
+/* ─── Refresh (یک درخواست هم‌زمان) ─── */
+
+let refreshInFlight: Promise<string | null> | null = null;
+
+export function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    try {
+      const result = await rawRequest<{ accessToken: string }>(
+        "/api/auth/refresh",
+        { method: "POST", body: {}, skipAuth: true },
+        null,
+      );
+      setAccessToken(result.accessToken);
+      return result.accessToken;
+    } catch (error) {
+      // فقط وقتی سرور صراحتاً رد کرده توکن را پاک کن؛ قطعی شبکه نباید کاربر را خارج کند.
+      if (error instanceof ApiError) setAccessToken(null);
+      return null;
+    }
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+
+  return refreshInFlight;
+}
+
+/**
+ * درخواست اصلی به API.
+ * در صورت 401، سعی می‌کند refresh کند.
+ */
+export async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
+  if (options.skipAuth) return rawRequest<T>(path, options, null);
+
+  try {
+    return await rawRequest<T>(path, options, getAccessToken());
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.statusCode !== 401) throw error;
+
+    const fresh = await refreshAccessToken();
+    if (!fresh) throw error;
+
+    return rawRequest<T>(path, options, fresh);
+  }
 }
 
 /* ═══════════════════════════════════
@@ -148,18 +155,21 @@ export const authApi = {
     apiFetch<LoginResponse & { needsVerification: boolean }>("/api/auth/register", {
       method: "POST",
       body: data,
+      skipAuth: true,
     }),
 
   login: (email: string, password: string) =>
     apiFetch<LoginResponse>("/api/auth/login", {
       method: "POST",
       body: { email, password },
+      skipAuth: true,
     }),
 
   guest: () =>
     apiFetch<LoginResponse>("/api/auth/guest", {
       method: "POST",
       body: {},
+      skipAuth: true,
     }),
 
   logout: () =>
@@ -168,7 +178,7 @@ export const authApi = {
       body: {},
     }),
 
-  me: (token: string) =>
+  me: (signal?: AbortSignal) =>
     apiFetch<{
       id: string;
       email: string;
@@ -185,18 +195,20 @@ export const authApi = {
         xp: number;
         streak: number;
       } | null;
-    }>("/api/auth/me", { token }),
+    }>("/api/auth/me", { signal }),
 
   requestPasswordReset: (email: string) =>
-    apiFetch<{ success: boolean }>("/api/auth/forgot-password", {
+    apiFetch<{ success: boolean; cooldownSeconds?: number }>("/api/auth/forgot-password", {
       method: "POST",
       body: { email },
+      skipAuth: true,
     }),
 
-  resetPassword: (data: { code: string; newPassword: string }) =>
+  resetPassword: (data: { email: string; code: string; newPassword: string }) =>
     apiFetch<{ success: boolean }>("/api/auth/reset-password", {
       method: "POST",
       body: data,
+      skipAuth: true,
     }),
 
   verifyEmail: (data: { code: string }) =>
@@ -206,7 +218,7 @@ export const authApi = {
     }),
 
   resendVerification: () =>
-    apiFetch<{ success: boolean }>("/api/auth/resend-verification", {
+    apiFetch<{ success: boolean; cooldownSeconds?: number }>("/api/auth/resend-verification", {
       method: "POST",
       body: {},
     }),
@@ -232,7 +244,6 @@ export type Word = {
 
 export const dictionaryApi = {
   search: (
-    token: string | null,
     params: {
       q?: string;
       level?: string;
@@ -240,10 +251,11 @@ export const dictionaryApi = {
       page?: number;
       limit?: number;
     } = {},
+    signal?: AbortSignal,
   ) =>
     apiFetch<{ words: Word[]; pagination: { total: number; page: number; limit: number; totalPages: number } }>(
       "/api/dictionary/search",
-      { token, query: params as Record<string, string | number> },
+      { query: params as Record<string, string | number>, signal },
     ),
 };
 
@@ -252,28 +264,26 @@ export const dictionaryApi = {
    ═══════════════════════════════════ */
 
 export const vocabularyApi = {
-  list: (token: string, params: { page?: number; limit?: number; status?: string } = {}) =>
+  list: (params: { page?: number; limit?: number; status?: string } = {}, signal?: AbortSignal) =>
     apiFetch<{ words: unknown[]; pagination: unknown }>("/api/vocabulary", {
-      token,
       query: params as Record<string, string | number>,
+      signal,
     }),
 
-  add: (token: string, wordId: string, status: "learning" | "learned" | "unknown" = "learning") =>
+  add: (wordId: string, status: "learning" | "learned" | "unknown" = "learning") =>
     apiFetch("/api/vocabulary", {
       method: "POST",
-      token,
       body: { wordId, status },
     }),
 
-  remove: (token: string, wordId: string) =>
+  remove: (wordId: string) =>
     apiFetch(`/api/vocabulary/${wordId}`, {
       method: "DELETE",
-      token,
     }),
 
-  stats: (token: string) =>
+  stats: (signal?: AbortSignal) =>
     apiFetch<{ total: number; learning: number; learned: number; unknown: number }>(
       "/api/vocabulary/stats",
-      { token },
+      { signal },
     ),
 };

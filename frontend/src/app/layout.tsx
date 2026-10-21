@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { themeInitScript } from "@/lib/theme";
+import { AuthProvider } from "@/components/providers/auth-provider";
 import "./globals.css";
 
 const vazirmatn = localFont({
@@ -45,7 +46,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className={vazirmatn.variable}>{children}</body>
+      <body className={vazirmatn.variable}>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }
