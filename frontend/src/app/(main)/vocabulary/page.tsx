@@ -1,8 +1,8 @@
-﻿export default function Page() {
-  return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">واژگان من</h1>
-      <p className="mt-4 text-muted">واژگان ذخیره‌شده - این صفحه در حال توسعه است.</p>
-    </div>
-  );
+import type { Metadata } from "next";
+import VocabularyView from "@/components/vocabulary/vocabulary-view";
+
+export const metadata: Metadata = { title: "واژگان من" };
+
+export default function VocabularyPage() {
+  return <VocabularyView />;
 }

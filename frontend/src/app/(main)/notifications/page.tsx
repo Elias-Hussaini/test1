@@ -1,8 +1,20 @@
-﻿export default function Page() {
+import type { Metadata } from "next";
+import { BellOff } from "lucide-react";
+import { Card, EmptyState, PageHeader } from "@/components/app/ui";
+
+export const metadata: Metadata = { title: "اعلان‌ها" };
+
+export default function NotificationsPage() {
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">اعلان‌ها</h1>
-      <p className="mt-4 text-muted">اعلان‌های شما - این صفحه در حال توسعه است.</p>
-    </div>
+    <>
+      <PageHeader title="اعلان‌ها" description="درخواست دوستی، پیام‌ها و یادآوری مرور اینجا می‌آیند." />
+      <Card>
+        <EmptyState
+          Icon={BellOff}
+          title="اعلانی نداری"
+          description="مرکز اعلان هنوز به بک‌اند وصل نشده است؛ بعد از اتصال، اعلان‌های واقعی با وضعیت خوانده/نخوانده اینجا نمایش داده می‌شوند."
+        />
+      </Card>
+    </>
   );
 }

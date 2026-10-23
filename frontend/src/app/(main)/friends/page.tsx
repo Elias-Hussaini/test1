@@ -1,8 +1,19 @@
-﻿export default function Page() {
+import type { Metadata } from "next";
+import { Users } from "lucide-react";
+import { ComingSoon, PageHeader } from "@/components/app/ui";
+
+export const metadata: Metadata = { title: "دوستان" };
+
+export default function FriendsPage() {
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">دوستان</h1>
-      <p className="mt-4 text-muted">دوستان و رقابت - این صفحه در حال توسعه است.</p>
-    </div>
+    <>
+      <PageHeader title="دوستان" description="با دوستانت آلمانی تمرین کن." />
+      <ComingSoon
+        Icon={Users}
+        title="فهرست دوستان به‌زودی فعال می‌شود"
+        description="سامانه‌ی دوستان هنوز به بک‌اند وصل نشده است. هیچ دوست یا درخواستی نمایش داده نمی‌شود تا زمانی که واقعی باشد."
+        points={["جستجوی کاربران با نام کاربری", "ارسال و پذیرش درخواست دوستی", "پروفایل کوتاه و سطح هر دوست", "شروع گفتگو یا تماس از همین‌جا"]}
+      />
+    </>
   );
 }

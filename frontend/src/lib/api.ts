@@ -263,27 +263,57 @@ export const dictionaryApi = {
    Vocabulary API
    ═══════════════════════════════════ */
 
+export type WordStatus = "learning" | "learned" | "unknown";
+
+export type SavedWord = {
+  id: string;
+  status: WordStatus;
+  createdAt: string;
+  word: Word;
+};
+
+export type Pagination = { total: number; page: number; limit: number; totalPages: number };
+
 export const vocabularyApi = {
-  list: (params: { page?: number; limit?: number; status?: string } = {}, signal?: AbortSignal) =>
-    apiFetch<{ words: unknown[]; pagination: unknown }>("/api/vocabulary", {
+  list: (
+    params: { page?: number; limit?: number; status?: WordStatus; level?: string } = {},
+    signal?: AbortSignal,
+  ) =>
+    apiFetch<{ words: SavedWord[]; pagination: Pagination }>("/api/vocabulary", {
       query: params as Record<string, string | number>,
       signal,
     }),
 
-  add: (wordId: string, status: "learning" | "learned" | "unknown" = "learning") =>
-    apiFetch("/api/vocabulary", {
-      method: "POST",
-      body: { wordId, status },
-    }),
+  add: (wordId: string, status: WordStatus = "learning") =>
+    apiFetch<SavedWord>("/api/vocabulary", { method: "POST", body: { wordId, status } }),
 
-  remove: (wordId: string) =>
-    apiFetch(`/api/vocabulary/${wordId}`, {
-      method: "DELETE",
-    }),
+  update: (wordId: string, status: WordStatus) =>
+    apiFetch<SavedWord>(`/api/vocabulary/${wordId}`, { method: "PATCH", body: { status } }),
+
+  remove: (wordId: string) => apiFetch(`/api/vocabulary/${wordId}`, { method: "DELETE" }),
 
   stats: (signal?: AbortSignal) =>
     apiFetch<{ total: number; learning: number; learned: number; unknown: number }>(
       "/api/vocabulary/stats",
       { signal },
+    ),
+};
+
+/* ═══════════════════════════════════
+   Users API
+   ═══════════════════════════════════ */
+
+export type ProfileUpdate = {
+  firstName?: string;
+  lastName?: string;
+  bio?: string;
+  level?: "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
+};
+
+export const usersApi = {
+  updateProfile: (data: ProfileUpdate) =>
+    apiFetch<{ firstName: string | null; lastName: string | null; bio: string | null; level: string; xp: number; streak: number }>(
+      "/api/users/me/profile",
+      { method: "PATCH", body: data },
     ),
 };

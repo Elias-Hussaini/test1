@@ -1,8 +1,13 @@
-﻿export default function Page() {
+import { Suspense } from "react";
+import type { Metadata } from "next";
+import DictionaryView from "@/components/dictionary/dictionary-view";
+
+export const metadata: Metadata = { title: "دیکشنری" };
+
+export default function DictionaryPage() {
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">واژه‌نامه</h1>
-      <p className="mt-4 text-muted">واژگان آلمانی - این صفحه در حال توسعه است.</p>
-    </div>
+    <Suspense fallback={null}>
+      <DictionaryView />
+    </Suspense>
   );
 }

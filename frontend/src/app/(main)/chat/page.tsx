@@ -1,8 +1,15 @@
-﻿export default function Page() {
+"use client";
+
+import { LockedNotice, PageHeader } from "@/components/app/ui";
+import ChatWorkspace from "@/components/chat/chat-workspace";
+import { usePlan } from "@/hooks/use-plan";
+
+export default function ChatPage() {
+  const { can } = usePlan();
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold">گفتگو</h1>
-      <p className="mt-4 text-muted">چت با دوستان - این صفحه در حال توسعه است.</p>
-    </div>
+    <>
+      <PageHeader title="پیام‌ها" description="گفتگوی خصوصی، اشتراک لغت و تصویر، تماس صوتی و تصویری." />
+      {can("chat") ? <ChatWorkspace /> : <LockedNotice feature="chat" />}
+    </>
   );
 }
